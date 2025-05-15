@@ -1,0 +1,57 @@
+.navbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 8%;
+    background-color: #f8f9fa;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+}
+
+.navbar-logo img {
+    height: 60px;
+    width: auto;
+}
+
+.navbar-links {
+    display: flex;
+    list-style: none;
+    gap: 20px;
+    align-items: center;
+    margin: 0;
+    padding: 0;
+}
+
+.navbar-links li {
+    transition: background-color 0.3s, color 0.3s;
+    padding: 8px 16px;
+    border-radius: 20px;
+}
+
+.navbar-links li:hover {
+    background-color: #103886ae;
+    color: #fff;
+}
+
+.navbar-links a {
+    text-decoration: none;
+    color: #000;
+    font-weight: 500;
+}
+
+.navbar-action .report-btn {
+    background-color: #103886;
+    color: #fff;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 25px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+.navbar-action .report-btn:hover {
+    background-color: #0d2c6a;
+}

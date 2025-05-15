@@ -1,17 +1,28 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 
+// Import your CSS file for styling
+import './NavBar.css'; 
+
 export function NavBar() {
     return (
-        <div className='navbar'>
-            <img src='img/UW-logo-512.png' alt="Logo" width= "130px" />
-            <ul>
+        <nav className="navbar">
+            <div className="navbar-logo">
+                <Link to="/">
+                    <img src="img/UW-logo-512.png" alt="UW Logo" />
+                </Link>
+            </div>
+            <ul className="navbar-links">
                 <Link to='/' ><li>Home</li></Link>
                 <Link to='/dashboard' ><li>Dashboard</li></Link>
-                <Link to='/about' ><li>About</li></Link>
-                <Link to='/contact' ><li>Contact</li></Link>
+                <Link to='/methodology' ><li>Methodology</li></Link>
+                <Link to='/about' ><li>About the Project</li></Link>
+                <Link to='/contact' ><li>Contact Us</li></Link>
             </ul>
-            <button>Report a Checkpoint</button>
-        </div>
+            <div className="navbar-action">
+                <button className="report-btn">Report a Checkpoint</button>
+            </div>
+        </nav>
     );
 }
+
