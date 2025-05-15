@@ -20,7 +20,7 @@ export function NavBar() {
                 <Link to='/contact' ><li>Contact Us</li></Link>
             </ul>
             <div className="navbar-action">
-                <button className="report-btn">Report a Checkpoint</button>
+                <Link to='/report'><button className="report-btn">Report a Checkpoint</button></Link>
             </div>
         </nav>
     );
