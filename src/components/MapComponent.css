@@ -1,0 +1,80 @@
+/* MapComponent.css */
+.legal-checkpoint-popup h3 {
+  margin: 0 0 8px 0;
+  color: #0047AB;
+  font-size: 18px;
+}
+
+.legal-checkpoint-popup p {
+  margin: 5px 0;
+  line-height: 1.4;
+}
+
+.legal-checkpoint-popup em {
+  display: block;
+  margin-top: 8px;
+  font-size: 12px;
+  color: #0047AB;
+  font-weight: bold;
+}
+
+/* Style for maplibregl popup */
+.maplibregl-popup-content {
+  padding: 12px;
+  border-radius: 4px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+}
+
+/* Custom marker styling */
+.legal-checkpoint-marker {
+  background-color: #0047AB;
+  border: 2px solid white;
+  border-radius: 50%;
+  cursor: pointer;
+  width: 16px;
+  height: 16px;
+}
+
+/* Map Legend Styles */
+.map-legend {
+  position: absolute;
+  bottom: 30px;
+  right: 10px;
+  background: white;
+  padding: 10px;
+  border-radius: 4px;
+  box-shadow: 0 0 10px rgba(0,0,0,0.1);
+  font-family: Arial, sans-serif;
+  z-index: 1;
+}
+
+.legend-title {
+  font-weight: bold;
+  margin-bottom: 8px;
+  font-size: 14px;
+  text-align: center;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  margin-bottom: 5px;
+  font-size: 12px;
+}
+
+.legend-marker {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 8px;
+  border-radius: 50%;
+}
+
+.legal-marker {
+  background-color: #0047AB;
+  border: 2px solid white;
+}
+
+.contribution-marker {
+  background-color: #B42222;
+} 
