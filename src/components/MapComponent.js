@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react'
 import maplibregl from 'maplibre-gl'
 import { createClient } from '@supabase/supabase-js'
 import 'maplibre-gl/dist/maplibre-gl.css'
+import './MapComponent.css'
 
 // Supabase setup
 const supabaseUrl = 'https://yybdwyflzpzgdqanrbpa.supabase.co'
@@ -13,6 +14,10 @@ const MapComponent = () => {
   const mapContainerRef = useRef(null)
   const mapRef = useRef(null)
   const geojsonRef = useRef({
+    type: 'FeatureCollection',
+    features: [],
+  })
+  const legalCheckpointsRef = useRef({
     type: 'FeatureCollection',
     features: [],
   })
@@ -29,10 +34,10 @@ const MapComponent = () => {
     mapRef.current = map
 
     // Fetch contributions
-    const loadData = async () => {
+    const loadContributions = async () => {
       const { data, error } = await supabase.from('contributions').select('*')
       if (error) {
-        console.error('Error fetching data:', error)
+        console.error('Error fetching contributions:', error)
         return
       }
 
@@ -41,6 +46,7 @@ const MapComponent = () => {
         properties: {
           contributor: record.contributor,
           content: record.content,
+          type: 'contribution'
         },
         geometry: {
           type: 'Point',
@@ -53,7 +59,37 @@ const MapComponent = () => {
       map.getSource('places')?.setData(geojsonRef.current)
     }
 
+    // Fetch legal checkpoints
+    const loadLegalCheckpoints = async () => {
+      const { data, error } = await supabase.from('legal_checkpoints').select('*')
+      if (error) {
+        console.error('Error fetching legal checkpoints:', error)
+        return
+      }
+
+      const features = data.map((record) => ({
+        type: 'Feature',
+        properties: {
+          id: record.id,
+          checkpoint_name: record.checkpoint_name,
+          city: record.city,
+          state: record.state,
+          description: record.description || '',
+          type: 'legal_checkpoint'
+        },
+        geometry: {
+          type: 'Point',
+          coordinates: [record.long, record.lat],
+        },
+      }))
+
+      legalCheckpointsRef.current.features = features
+
+      map.getSource('legal_checkpoints')?.setData(legalCheckpointsRef.current)
+    }
+
     map.on('load', () => {
+      // Add source and layer for user contributions
       map.addSource('places', {
         type: 'geojson',
         data: geojsonRef.current,
@@ -69,11 +105,49 @@ const MapComponent = () => {
         },
       })
 
-      loadData()
+      // Add source and layer for legal checkpoints
+      map.addSource('legal_checkpoints', {
+        type: 'geojson',
+        data: legalCheckpointsRef.current,
+      })
+
+      map.addLayer({
+        id: 'legalCheckpointsLayer',
+        type: 'circle',
+        source: 'legal_checkpoints',
+        paint: {
+          'circle-radius': 8,
+          'circle-color': '#0047AB',
+          'circle-stroke-width': 2,
+          'circle-stroke-color': '#ffffff',
+        },
+      })
+
+      // Load data for both sources
+      loadContributions()
+      loadLegalCheckpoints()
+      
+      // Add map legend
+      const legend = document.createElement('div')
+      legend.className = 'map-legend'
+      legend.innerHTML = `
+        <div class="legend-title">Map Legend</div>
+        <div class="legend-item">
+          <span class="legend-marker legal-marker"></span>
+          <span>Official Legal Checkpoint</span>
+        </div>
+        <div class="legend-item">
+          <span class="legend-marker contribution-marker"></span>
+          <span>User Reported Checkpoint</span>
+        </div>
+      `
+      
+      map.getContainer().appendChild(legend)
     })
 
     let popup = null
 
+    // Popup for user contributions
     map.on('mouseenter', 'placesLayer', (e) => {
       map.getCanvas().style.cursor = 'pointer'
 
@@ -91,7 +165,42 @@ const MapComponent = () => {
       popup?.remove()
     })
 
+    // Popup for legal checkpoints
+    map.on('mouseenter', 'legalCheckpointsLayer', (e) => {
+      map.getCanvas().style.cursor = 'pointer'
+
+      const { coordinates } = e.features[0].geometry
+      const { checkpoint_name, city, state, description } = e.features[0].properties
+
+      popup = new maplibregl.Popup()
+        .setLngLat(coordinates)
+        .setHTML(`
+          <div class="legal-checkpoint-popup">
+            <h3>${checkpoint_name}</h3>
+            <p><strong>Location:</strong> ${city}, ${state}</p>
+            ${description ? `<p><strong>Description:</strong> ${description}</p>` : ''}
+            <p><em>Official Legal Checkpoint</em></p>
+          </div>
+        `)
+        .addTo(map)
+    })
+
+    map.on('mouseleave', 'legalCheckpointsLayer', () => {
+      map.getCanvas().style.cursor = ''
+      popup?.remove()
+    })
+
     map.on('click', (e) => {
+      // Check if click is on a legal checkpoint, if so, do nothing
+      const features = map.queryRenderedFeatures(e.point, { 
+        layers: ['legalCheckpointsLayer'] 
+      });
+      
+      if (features.length > 0) {
+        return; // Don't open submission popup if clicking on a legal checkpoint
+      }
+      
+      // Standard user contribution form
       popup?.remove()
 
       const popupContent = `
@@ -132,7 +241,11 @@ const MapComponent = () => {
 
       const newFeature = {
         type: 'Feature',
-        properties: { contributor, content },
+        properties: { 
+          contributor, 
+          content,
+          type: 'contribution' 
+        },
         geometry: {
           type: 'Point',
           coordinates: [lngLat.lng, lngLat.lat],
