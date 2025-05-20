@@ -1,3 +1,4 @@
+// ReportMap.js
 import { useEffect, useRef } from 'react'
 import maplibregl from 'maplibre-gl'
 import { createClient } from '@supabase/supabase-js'
@@ -5,14 +6,20 @@ import 'maplibre-gl/dist/maplibre-gl.css'
 
 // Supabase setup
 const supabaseUrl = 'https://yybdwyflzpzgdqanrbpa.supabase.co'
-const supabaseKey = 'eeyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl5YmR3eWZsenB6Z2RxYW5yYnBhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY4Mzg0NDYsImV4cCI6MjA2MjQxNDQ0Nn0.P5frBEg6mUQqfYIcGtKDYUSpG-po6wla7zsz3PTgYgw'
+const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl5YmR3eWZsenB6Z2RxYW5yYnBhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY4Mzg0NDYsImV4cCI6MjA2MjQxNDQ0Nn0.P5frBEg6mUQqfYIcGtKDYUSpG-po6wla7zsz3PTgYgw'
 const supabase = createClient(supabaseUrl, supabaseKey)
 
-const MapComponent = () => {
+const ReportMap = () => {
   const mapContainerRef = useRef(null)
   const mapRef = useRef(null)
-  const geojsonRef = useRef({ type: 'FeatureCollection', features: [] })
-  const legalCheckpointsRef = useRef({ type: 'FeatureCollection', features: [] })
+  const geojsonRef = useRef({
+    type: 'FeatureCollection',
+    features: [],
+  })
+  const legalCheckpointsRef = useRef({
+    type: 'FeatureCollection',
+    features: [],
+  })
 
   useEffect(() => {
     const map = new maplibregl.Map({
@@ -37,7 +44,7 @@ const MapComponent = () => {
         properties: {
           contributor: record.contributor,
           content: record.content,
-          type: 'contribution',
+          type: 'contribution'
         },
         geometry: {
           type: 'Point',
@@ -64,7 +71,7 @@ const MapComponent = () => {
           city: record.city,
           state: record.state,
           description: record.description || '',
-          type: 'legal_checkpoint',
+          type: 'legal_checkpoint'
         },
         geometry: {
           type: 'Point',
@@ -77,7 +84,7 @@ const MapComponent = () => {
     }
 
     map.on('load', () => {
-      map.resize()
+      map.resize(); // 🔧 Fix: Resize after load to prevent blank map
 
       map.addSource('places', {
         type: 'geojson',
@@ -171,12 +178,73 @@ const MapComponent = () => {
       popup?.remove()
     })
 
+    map.on('click', (e) => {
+      const features = map.queryRenderedFeatures(e.point, {
+        layers: ['legalCheckpointsLayer']
+      })
+
+      if (features.length > 0) return
+
+      popup?.remove()
+      const popupContent = `
+        <div id="popup">
+          <input type="text" id="name" placeholder="Your name..." />
+          <input type="text" id="content" placeholder="Describe the checkpoint..." />
+          <button id="submit">Submit</button>
+        </div>
+      `
+      popup = new maplibregl.Popup({ closeOnClick: false })
+        .setLngLat(e.lngLat)
+        .setHTML(popupContent)
+        .addTo(map)
+
+      setTimeout(() => {
+        const submitBtn = document.getElementById('submit')
+        submitBtn?.addEventListener('click', () => handleSubmit(e.lngLat, popup))
+      }, 0)
+    })
+
     return () => {
       map.remove()
     }
   }, [])
 
+  const handleSubmit = async (lngLat, popupInstance) => {
+    const contributor = document.getElementById('name')?.value
+    const content = document.getElementById('content')?.value
+
+    try {
+      const { data, error } = await supabase
+        .from('contributions')
+        .insert([{ contributor, content, lat: lngLat.lat, lng: lngLat.lng }])
+        .select()
+
+      if (error) throw error
+
+      const newFeature = {
+        type: 'Feature',
+        properties: {
+          contributor,
+          content,
+          type: 'contribution'
+        },
+        geometry: {
+          type: 'Point',
+          coordinates: [lngLat.lng, lngLat.lat],
+        },
+      }
+
+      geojsonRef.current.features.push(newFeature)
+      popupInstance.remove()
+
+      const map = mapRef.current
+      map?.getSource('places')?.setData(geojsonRef.current)
+    } catch (err) {
+      console.error('Error submitting:', err)
+    }
+  }
+
   return <div ref={mapContainerRef} style={{ height: '100%', width: '100%' }} />
 }
 
-export default MapComponent
+export default ReportMap

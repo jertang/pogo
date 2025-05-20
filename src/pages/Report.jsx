@@ -1,12 +1,19 @@
 import React from "react";
+import ReportMap from "../components/ReportMap";
 
-import MapComponent from "../components/MapComponent";
-
-export function Report() { 
-    return (
-        <div className="report">
-            <h1>Report a Checkpoint</h1>
-            <MapComponent />
-        </div>
-    );
+export function Report() {
+  return (
+    <div
+      className="report"
+      style={{
+        height: '100vh',
+        width: '100vw', // full width
+        margin: 0,
+        padding: 0,
+        overflow: 'hidden', // prevents scrollbars from phantom margins
+      }}
+    >
+      <ReportMap />
+    </div>
+  );
 }
