@@ -12,7 +12,7 @@ export function Home() {
         <p>
           This map shows current legal checkpoints and community-submitted reports.
           Scroll and zoom to explore various locations. You can click on a map marker
-          to read more details or submit a new report by clicking on the map.
+          to read more details.
         </p>
         <p>
           Below you'll find detailed statistics and stories from people who have encountered

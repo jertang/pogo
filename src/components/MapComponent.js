@@ -1,3 +1,4 @@
+// MapComponent.js
 import { useEffect, useRef } from 'react'
 import maplibregl from 'maplibre-gl'
 import { createClient } from '@supabase/supabase-js'
@@ -5,14 +6,20 @@ import 'maplibre-gl/dist/maplibre-gl.css'
 
 // Supabase setup
 const supabaseUrl = 'https://yybdwyflzpzgdqanrbpa.supabase.co'
-const supabaseKey = 'eeyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl5YmR3eWZsenB6Z2RxYW5yYnBhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY4Mzg0NDYsImV4cCI6MjA2MjQxNDQ0Nn0.P5frBEg6mUQqfYIcGtKDYUSpG-po6wla7zsz3PTgYgw'
+const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl5YmR3eWZsenB6Z2RxYW5yYnBhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY4Mzg0NDYsImV4cCI6MjA2MjQxNDQ0Nn0.P5frBEg6mUQqfYIcGtKDYUSpG-po6wla7zsz3PTgYgw'
 const supabase = createClient(supabaseUrl, supabaseKey)
 
 const MapComponent = () => {
   const mapContainerRef = useRef(null)
   const mapRef = useRef(null)
-  const geojsonRef = useRef({ type: 'FeatureCollection', features: [] })
-  const legalCheckpointsRef = useRef({ type: 'FeatureCollection', features: [] })
+  const geojsonRef = useRef({
+    type: 'FeatureCollection',
+    features: [],
+  })
+  const legalCheckpointsRef = useRef({
+    type: 'FeatureCollection',
+    features: [],
+  })
 
   useEffect(() => {
     const map = new maplibregl.Map({
@@ -20,7 +27,7 @@ const MapComponent = () => {
       style:
         'https://api.maptiler.com/maps/0196cd3f-fb75-77c7-b9fc-336a56159c73/style.json?key=6Yi2lIi7fKDCpeBAXoYW',
       center: [-98.5795, 39.8283],
-      zoom: 4,
+      zoom: 2.5,
     })
 
     mapRef.current = map
