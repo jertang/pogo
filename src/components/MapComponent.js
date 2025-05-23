@@ -16,7 +16,7 @@ const MapComponent = () => {
     type: 'FeatureCollection',
     features: [],
   })
-  const legalCheckpointsRef = useRef({
+  const borderStationsRef = useRef({
     type: 'FeatureCollection',
     features: [],
   })
@@ -32,19 +32,22 @@ const MapComponent = () => {
 
     mapRef.current = map
 
-    const loadContributions = async () => {
-      const { data, error } = await supabase.from('contributions').select('*')
+    const loadCheckpointReports = async () => {
+      const { data, error } = await supabase.from('checkpoint_reports').select('*')
       if (error) {
-        console.error('Error fetching contributions:', error)
+        console.error('Error fetching checkpoint reports:', error)
         return
       }
 
       const features = data.map((record) => ({
         type: 'Feature',
         properties: {
-          contributor: record.contributor,
-          content: record.content,
-          type: 'contribution',
+          checkpoint_type: record.checkpoint_type,
+          agency: record.agency,
+          date_observed: record.date_observed,
+          details: record.details,
+          using_technology: record.using_technology,
+          type: 'user_report',
         },
         geometry: {
           type: 'Point',
@@ -56,10 +59,10 @@ const MapComponent = () => {
       map.getSource('places')?.setData(geojsonRef.current)
     }
 
-    const loadLegalCheckpoints = async () => {
-      const { data, error } = await supabase.from('legal_checkpoints').select('*')
+    const loadBorderStations = async () => {
+      const { data, error } = await supabase.from('border_stations').select('*')
       if (error) {
-        console.error('Error fetching legal checkpoints:', error)
+        console.error('Error fetching border stations:', error)
         return
       }
 
@@ -67,11 +70,11 @@ const MapComponent = () => {
         type: 'Feature',
         properties: {
           id: record.id,
-          checkpoint_name: record.checkpoint_name,
+          station_name: record.station_name,
           city: record.city,
           state: record.state,
           description: record.description || '',
-          type: 'legal_checkpoint',
+          type: 'border_station',
         },
         geometry: {
           type: 'Point',
@@ -79,8 +82,8 @@ const MapComponent = () => {
         },
       }))
 
-      legalCheckpointsRef.current.features = features
-      map.getSource('legal_checkpoints')?.setData(legalCheckpointsRef.current)
+      borderStationsRef.current.features = features
+      map.getSource('border_stations')?.setData(borderStationsRef.current)
     }
 
     map.on('load', () => {
@@ -101,15 +104,15 @@ const MapComponent = () => {
         },
       })
 
-      map.addSource('legal_checkpoints', {
+      map.addSource('border_stations', {
         type: 'geojson',
-        data: legalCheckpointsRef.current,
+        data: borderStationsRef.current,
       })
 
       map.addLayer({
-        id: 'legalCheckpointsLayer',
+        id: 'borderStationsLayer',
         type: 'circle',
-        source: 'legal_checkpoints',
+        source: 'border_stations',
         paint: {
           'circle-radius': 8,
           'circle-color': '#0047AB',
@@ -118,8 +121,8 @@ const MapComponent = () => {
         },
       })
 
-      loadContributions()
-      loadLegalCheckpoints()
+      loadCheckpointReports()
+      loadBorderStations()
 
       const legend = document.createElement('div')
       legend.className = 'map-legend'
@@ -127,7 +130,7 @@ const MapComponent = () => {
         <div class="legend-title">Map Legend</div>
         <div class="legend-item">
           <span class="legend-marker legal-marker"></span>
-          <span>Official Legal Checkpoint</span>
+          <span>Border Patrol Station</span>
         </div>
         <div class="legend-item">
           <span class="legend-marker contribution-marker"></span>
@@ -142,11 +145,20 @@ const MapComponent = () => {
     map.on('mouseenter', 'placesLayer', (e) => {
       map.getCanvas().style.cursor = 'pointer'
       const { coordinates } = e.features[0].geometry
-      const { content, contributor } = e.features[0].properties
+      const { checkpoint_type, agency, date_observed, details, using_technology } = e.features[0].properties
 
       popup = new maplibregl.Popup()
         .setLngLat(coordinates)
-        .setHTML(`<p><b>${contributor}</b> <i>reported:</i> ${content}</p>`)
+        .setHTML(`
+          <div style="background: white; padding: 12px; border-radius: 8px; max-width: 250px;">
+            <h4 style="margin: 0 0 8px 0; color: #B42222;">User Reported Checkpoint</h4>
+            <p><strong>Type:</strong> ${checkpoint_type}</p>
+            <p><strong>Agency:</strong> ${agency}</p>
+            <p><strong>Date:</strong> ${date_observed}</p>
+            ${details ? `<p><strong>Details:</strong> ${details}</p>` : ''}
+            ${using_technology ? `<p><strong>Technology Used:</strong> Yes</p>` : ''}
+          </div>
+        `)
         .addTo(map)
     })
 
@@ -155,25 +167,25 @@ const MapComponent = () => {
       popup?.remove()
     })
 
-    map.on('mouseenter', 'legalCheckpointsLayer', (e) => {
+    map.on('mouseenter', 'borderStationsLayer', (e) => {
       map.getCanvas().style.cursor = 'pointer'
       const { coordinates } = e.features[0].geometry
-      const { checkpoint_name, city, state, description } = e.features[0].properties
+      const { station_name, city, state, description } = e.features[0].properties
 
       popup = new maplibregl.Popup()
         .setLngLat(coordinates)
         .setHTML(`
           <div class="legal-checkpoint-popup">
-            <h3>${checkpoint_name}</h3>
+            <h3>${station_name}</h3>
             <p><strong>Location:</strong> ${city}, ${state}</p>
             ${description ? `<p><strong>Description:</strong> ${description}</p>` : ''}
-            <p><em>Official Legal Checkpoint</em></p>
+            <p><em>Border Patrol Station</em></p>
           </div>
         `)
         .addTo(map)
     })
 
-    map.on('mouseleave', 'legalCheckpointsLayer', () => {
+    map.on('mouseleave', 'borderStationsLayer', () => {
       map.getCanvas().style.cursor = ''
       popup?.remove()
     })
