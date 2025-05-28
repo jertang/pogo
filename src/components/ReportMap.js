@@ -25,6 +25,9 @@ const ReportMap = () => {
   const [showForm, setShowForm] = useState(false)
   const [showCheckpointInfo, setShowCheckpointInfo] = useState(false)
   const [selectedCheckpoint, setSelectedCheckpoint] = useState(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchResults, setSearchResults] = useState([])
+  const [showSearchResults, setShowSearchResults] = useState(false)
   const [formData, setFormData] = useState({
     checkpoint_type: '',
     agency: '',
@@ -36,7 +39,7 @@ const ReportMap = () => {
   })
 
   useEffect(() => {
-    // Add custom styles for the sidebar form
+    // custom styles for map and sidebar
     const style = document.createElement('style')
     style.textContent = `
       .report-container {
@@ -336,6 +339,93 @@ const ReportMap = () => {
         font-size: 16px;
         margin-right: 6px;
       }
+      
+      .search-container {
+        position: absolute;
+        top: 100px;
+        left: 20px;
+        z-index: 1000;
+        width: 300px;
+      }
+      
+      .search-box {
+        width: 100%;
+        padding: 12px 16px;
+        border: 2px solid #e0e0e0;
+        border-radius: 8px;
+        background: white;
+        color: #333;
+        font-size: 14px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        transition: all 0.3s ease;
+        box-sizing: border-box;
+      }
+      
+      .search-box:focus {
+        outline: none;
+        border-color: #667eea;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15), 0 0 0 3px rgba(102, 126, 234, 0.1);
+      }
+      
+      .search-box::placeholder {
+        color: #999;
+      }
+      
+      .search-results {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: white;
+        border: 2px solid #e0e0e0;
+        border-top: none;
+        border-radius: 0 0 8px 8px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        max-height: 200px;
+        overflow-y: auto;
+        z-index: 1001;
+      }
+      
+      .search-result-item {
+        padding: 12px 16px;
+        cursor: pointer;
+        border-bottom: 1px solid #f0f0f0;
+        transition: background-color 0.2s ease;
+      }
+      
+      .search-result-item:hover {
+        background-color: #f8f9fa;
+      }
+      
+      .search-result-item:last-child {
+        border-bottom: none;
+      }
+      
+      .search-result-name {
+        font-weight: 500;
+        color: #333;
+        font-size: 14px;
+        margin-bottom: 2px;
+      }
+      
+      .search-result-address {
+        color: #666;
+        font-size: 12px;
+      }
+      
+      .search-loading {
+        padding: 12px 16px;
+        text-align: center;
+        color: #666;
+        font-size: 13px;
+      }
+      
+      .search-no-results {
+        padding: 12px 16px;
+        text-align: center;
+        color: #999;
+        font-size: 13px;
+      }
     `
     document.head.appendChild(style)
 
@@ -603,6 +693,69 @@ const ReportMap = () => {
     }
   }, [])
 
+  // Search functionality
+  const searchLocation = async (query) => {
+    if (!query.trim()) {
+      setSearchResults([])
+      setShowSearchResults(false)
+      return
+    }
+
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&countrycodes=us`
+      )
+      const data = await response.json()
+      
+      const results = data.map(item => ({
+        name: item.display_name.split(',')[0],
+        address: item.display_name,
+        lat: parseFloat(item.lat),
+        lng: parseFloat(item.lon)
+      }))
+      
+      setSearchResults(results)
+      setShowSearchResults(true)
+    } catch (error) {
+      console.error('Search error:', error)
+      setSearchResults([])
+      setShowSearchResults(false)
+    }
+  }
+
+  const handleSearchChange = (e) => {
+    const query = e.target.value
+    setSearchQuery(query)
+    
+    // Debounce search requests
+    clearTimeout(window.searchTimeout)
+    window.searchTimeout = setTimeout(() => {
+      searchLocation(query)
+    }, 300)
+  }
+
+  const handleSearchResultClick = (result) => {
+    const map = mapRef.current
+    if (map) {
+      // Fly to the selected location
+      map.flyTo({
+        center: [result.lng, result.lat],
+        zoom: 14,
+        duration: 2000
+      })
+    }
+    
+    setSearchQuery(result.name)
+    setShowSearchResults(false)
+  }
+
+  const handleSearchBlur = () => {
+    // Delay hiding results to allow clicking on them
+    setTimeout(() => {
+      setShowSearchResults(false)
+    }, 200)
+  }
+
   const handleFormChange = (field, value) => {
     setFormData(prev => ({
       ...prev,
@@ -684,6 +837,38 @@ const ReportMap = () => {
     <div className="report-container">
       <div className="map-container">
         <div ref={mapContainerRef} style={{ height: '100%', width: '100%' }} />
+        
+        <div className="search-container">
+          <input
+            type="text"
+            className="search-box"
+            placeholder="Search for an address or location..."
+            value={searchQuery}
+            onChange={handleSearchChange}
+            onFocus={() => searchQuery && setShowSearchResults(true)}
+            onBlur={handleSearchBlur}
+          />
+          
+          {showSearchResults && (
+            <div className="search-results">
+              {searchResults.length > 0 ? (
+                searchResults.map((result, index) => (
+                  <div
+                    key={index}
+                    className="search-result-item"
+                    onClick={() => handleSearchResultClick(result)}
+                  >
+                    <div className="search-result-name">{result.name}</div>
+                    <div className="search-result-address">{result.address}</div>
+                  </div>
+                ))
+              ) : (
+                <div className="search-no-results">No results found</div>
+              )}
+            </div>
+          )}
+        </div>
+        
         {!showForm && !showCheckpointInfo && (
           <div className="click-instruction">
             <span className="click-instruction-icon">🗺️</span>Click anywhere on the map to report a checkpoint, or click on a dot to view more information.
