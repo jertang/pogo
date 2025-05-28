@@ -28,14 +28,19 @@ const ReportMap = () => {
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState([])
   const [showSearchResults, setShowSearchResults] = useState(false)
+  const [checkpointType, setCheckpointType] = useState('unofficial')
   const [formData, setFormData] = useState({
     checkpoint_type: '',
     agency: '',
     date_observed: '',
     details: '',
-    using_technology: false,
     lat: null,
-    lng: null
+    lng: null,
+    verification: '',
+    using_technology: false,
+    location: '',
+    description: '',
+    date: '', // for official
   })
 
   useEffect(() => {
@@ -494,55 +499,123 @@ const ReportMap = () => {
       map.getSource('border_stations')?.setData(legalCheckpointsRef.current)
     }
 
+    const loadOfficialCheckpoints = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('official_checkpoints')
+          .select('*')
+        if (error) throw error
+        const features = data.map(checkpoint => ({
+          type: 'Feature',
+          properties: {
+            id: checkpoint.id,
+            location: checkpoint.location,
+            date: checkpoint.date,
+            verification: checkpoint.verification,
+            description: checkpoint.description,
+            agency: checkpoint.agency,
+            using_technology: checkpoint.using_technology,
+            type: 'official',
+          },
+          geometry: {
+            type: 'Point',
+            coordinates: [checkpoint.longitude, checkpoint.latitude],
+          },
+        }))
+        if (mapRef.current && mapRef.current.getSource('official_checkpoints')) {
+          mapRef.current.getSource('official_checkpoints').setData({
+            type: 'FeatureCollection',
+            features,
+          })
+        }
+      } catch (error) {
+        console.error('Error loading official checkpoints:', error)
+      }
+    }
+
     map.on('load', () => {
       map.resize()
 
+      // User Reports (Unofficial)
       map.addSource('places', {
         type: 'geojson',
         data: geojsonRef.current,
       })
-
       map.addLayer({
         id: 'placesLayer',
         type: 'circle',
         source: 'places',
         paint: {
-          'circle-radius': 6,
-          'circle-color': '#B42222',
+          'circle-radius': 8,
+          'circle-color': '#B42222', // Red
+          'circle-stroke-width': 2,
+          'circle-stroke-color': '#fff',
         },
       })
 
+      // Border Stations
       map.addSource('border_stations', {
         type: 'geojson',
         data: legalCheckpointsRef.current,
       })
-
       map.addLayer({
         id: 'borderStationsLayer',
         type: 'circle',
         source: 'border_stations',
         paint: {
           'circle-radius': 8,
-          'circle-color': '#0047AB',
+          'circle-color': '#0047AB', // Blue
           'circle-stroke-width': 2,
-          'circle-stroke-color': '#ffffff',
+          'circle-stroke-color': '#fff',
+        },
+      })
+
+      // Official Checkpoints
+      map.addSource('official_checkpoints', {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] },
+      })
+      map.addLayer({
+        id: 'officialCheckpointsLayer',
+        type: 'circle',
+        source: 'official_checkpoints',
+        paint: {
+          'circle-radius': 8,
+          'circle-color': '#2ecc40', // Green
+          'circle-stroke-width': 2,
+          'circle-stroke-color': '#fff',
         },
       })
 
       loadCheckpointReports()
       loadBorderStations()
+      loadOfficialCheckpoints()
 
+      // Add a visible legend
       const legend = document.createElement('div')
       legend.className = 'map-legend'
+      legend.style.position = 'absolute'
+      legend.style.bottom = '30px'
+      legend.style.left = '30px'
+      legend.style.background = 'white'
+      legend.style.padding = '12px 18px'
+      legend.style.borderRadius = '8px'
+      legend.style.boxShadow = '0 2px 8px rgba(0,0,0,0.08)'
+      legend.style.fontSize = '14px'
+      legend.style.zIndex = 1200
       legend.innerHTML = `
-        <div class="legend-title">Map Legend</div>
-        <div class="legend-item">
-          <span class="legend-marker legal-marker"></span>
-          <span>Border Patrol Station</span>
-        </div>
-        <div class="legend-item">
-          <span class="legend-marker contribution-marker"></span>
+        <div style="font-weight:600;margin-bottom:8px;">Map Legend</div>
+        <div style="display:flex;align-items:center;margin-bottom:6px;">
+          <span style="display:inline-block;width:16px;height:16px;border-radius:50%;background:#B42222;border:2px solid #fff;margin-right:8px;"></span>
           <span>User Reported Checkpoint</span>
+        </div>
+        <div style="display:flex;align-items:center;margin-bottom:6px;">
+          <span style="display:inline-block;width:16px;height:16px;border-radius:50%;background:#2ecc40;border:2px solid #fff;margin-right:8px;"></span>
+          <span>Official Checkpoint</span>
+        </div>
+        <div style="display:flex;align-items:center;">
+          <span style="display:inline-block;width:16px;height:16px;border-radius:50%;background:#0047AB;border:2px solid #fff;margin-right:8px;"></span>
+          <span>Border Patrol Station</span>
         </div>
       `
       map.getContainer().appendChild(legend)
@@ -594,6 +667,30 @@ const ReportMap = () => {
     })
 
     map.on('mouseleave', 'borderStationsLayer', () => {
+      map.getCanvas().style.cursor = ''
+      popup?.remove()
+    })
+
+    map.on('mouseenter', 'officialCheckpointsLayer', (e) => {
+      map.getCanvas().style.cursor = 'pointer'
+      const { coordinates } = e.features[0].geometry
+      const { location, date, verification, description, agency, using_technology } = e.features[0].properties
+      popup = new maplibregl.Popup()
+        .setLngLat(coordinates)
+        .setHTML(`
+          <div class="popup-content">
+            <h4 class="popup-title" style="color:#2ecc40;">Official Checkpoint</h4>
+            <div class="popup-field"><strong>Location:</strong> ${location}</div>
+            <div class="popup-field"><strong>Date:</strong> ${date}</div>
+            <div class="popup-field"><strong>Verification:</strong> ${verification}</div>
+            ${description ? `<div class="popup-field"><strong>Description:</strong> ${description}</div>` : ''}
+            <div class="popup-field"><strong>Agency:</strong> ${agency}</div>
+            ${using_technology ? `<div class="popup-field"><strong>Technology Used:</strong> Yes</div>` : ''}
+          </div>
+        `)
+        .addTo(map)
+    })
+    map.on('mouseleave', 'officialCheckpointsLayer', () => {
       map.getCanvas().style.cursor = ''
       popup?.remove()
     })
@@ -652,6 +749,32 @@ const ReportMap = () => {
         setShowCheckpointInfo(true)
         setShowForm(false)
         
+        if (tempMarkerRef.current) {
+          tempMarkerRef.current.remove()
+          tempMarkerRef.current = null
+        }
+        return
+      }
+
+      // Check if clicking on an official checkpoint
+      const officialFeatures = map.queryRenderedFeatures(e.point, {
+        layers: ['officialCheckpointsLayer']
+      })
+      if (officialFeatures.length > 0) {
+        const feature = officialFeatures[0]
+        setSelectedCheckpoint({
+          type: 'official',
+          location: feature.properties.location,
+          date: feature.properties.date,
+          verification: feature.properties.verification,
+          description: feature.properties.description,
+          agency: feature.properties.agency,
+          using_technology: feature.properties.using_technology,
+          lat: feature.geometry.coordinates[1],
+          lng: feature.geometry.coordinates[0],
+        })
+        setShowCheckpointInfo(true)
+        setShowForm(false)
         if (tempMarkerRef.current) {
           tempMarkerRef.current.remove()
           tempMarkerRef.current = null
@@ -765,55 +888,41 @@ const ReportMap = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-
-    if (!formData.checkpoint_type || !formData.agency || !formData.date_observed) {
-      alert('Please fill in all required fields')
-      return
-    }
-
     try {
-      const { data, error } = await supabase
-        .from('checkpoint_reports')
-        .insert([{ 
-          checkpoint_type: formData.checkpoint_type, 
-          agency: formData.agency, 
-          date_observed: formData.date_observed, 
-          details: formData.details, 
-          using_technology: formData.using_technology,
-          lat: formData.lat, 
-          lng: formData.lng 
-        }])
-        .select()
-
-      if (error) throw error
-
-      const newFeature = {
-        type: 'Feature',
-        properties: {
-          checkpoint_type: formData.checkpoint_type,
-          agency: formData.agency,
-          date_observed: formData.date_observed,
-          details: formData.details,
-          using_technology: formData.using_technology,
-          type: 'user_report'
-        },
-        geometry: {
-          type: 'Point',
-          coordinates: [formData.lng, formData.lat],
-        },
+      if (checkpointType === 'official') {
+        const { data, error } = await supabase
+          .from('official_checkpoints')
+          .insert([{
+            location: formData.location,
+            date: formData.date,
+            verification: formData.verification,
+            description: formData.description,
+            agency: formData.agency,
+            using_technology: formData.using_technology,
+            latitude: formData.lat,
+            longitude: formData.lng
+          }])
+          .select()
+        if (error) throw error
+        alert('Official checkpoint submitted!')
+        setShowForm(false)
+      } else {
+        const { data, error } = await supabase
+          .from('checkpoint_reports')
+          .insert([{
+            checkpoint_type: formData.checkpoint_type,
+            agency: formData.agency,
+            date_observed: formData.date_observed,
+            details: formData.details,
+            using_technology: formData.using_technology,
+            lat: formData.lat,
+            lng: formData.lng
+          }])
+          .select()
+        if (error) throw error
+        alert('Unofficial checkpoint submitted!')
+        setShowForm(false)
       }
-
-      geojsonRef.current.features.push(newFeature)
-      const map = mapRef.current
-      map?.getSource('places')?.setData(geojsonRef.current)
-
-      // Remove temporary marker and close form
-      if (tempMarkerRef.current) {
-        tempMarkerRef.current.remove()
-        tempMarkerRef.current = null
-      }
-      setShowForm(false)
-      
     } catch (err) {
       console.error('Error submitting:', err)
       alert('Error submitting report. Please try again.')
@@ -835,9 +944,7 @@ const ReportMap = () => {
 
   return (
     <div className="report-container">
-      <div className="map-container">
-        <div ref={mapContainerRef} style={{ height: '100%', width: '100%' }} />
-        
+      <div className="map-container" ref={mapContainerRef}>
         <div className="search-container">
           <input
             type="text"
@@ -848,7 +955,6 @@ const ReportMap = () => {
             onFocus={() => searchQuery && setShowSearchResults(true)}
             onBlur={handleSearchBlur}
           />
-          
           {showSearchResults && (
             <div className="search-results">
               {searchResults.length > 0 ? (
@@ -868,6 +974,7 @@ const ReportMap = () => {
             </div>
           )}
         </div>
+        <div ref={mapContainerRef} style={{ height: '100%', width: '100%' }} />
         
         {!showForm && !showCheckpointInfo && (
           <div className="click-instruction">
@@ -878,93 +985,179 @@ const ReportMap = () => {
       
       <div className={`form-sidebar ${showForm ? 'visible' : ''}`}>
         <button className="close-button" onClick={handleCloseForm}>×</button>
-        
-        <h2 className="form-title">Report a Checkpoint</h2>
-        
+        <h2 className="form-title">Report an {checkpointType === 'official' ? 'Official' : 'Unofficial'} Checkpoint</h2>
         <div className="coordinates-display">
           <strong>Location:</strong>
           Lat: {formData.lat?.toFixed(6)}<br />
           Lng: {formData.lng?.toFixed(6)}
         </div>
-
         <form onSubmit={handleSubmit}>
-          <div className="form-row">
-            <div className="form-group">
-              <label className="form-label">Type of Checkpoint *</label>
-              <select 
-                className="form-select"
-                value={formData.checkpoint_type}
-                onChange={(e) => handleFormChange('checkpoint_type', e.target.value)}
-                required
-              >
-                <option value="">Select type...</option>
-                <option value="DUI/Sobriety">DUI/Sobriety</option>
-                <option value="Immigration">Immigration</option>
-                <option value="Drug Enforcement">Drug Enforcement</option>
-                <option value="Traffic Safety">Traffic Safety</option>
-                <option value="License/Registration">License/Registration</option>
-                <option value="Other">Other</option>
-              </select>
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Agency or Type *</label>
-              <select 
-                className="form-select"
-                value={formData.agency}
-                onChange={(e) => handleFormChange('agency', e.target.value)}
-                required
-              >
-                <option value="">Select agency...</option>
-                <option value="Local Police">Local Police</option>
-                <option value="State Police">State Police</option>
-                <option value="Sheriff's Department">Sheriff's Department</option>
-                <option value="Border Patrol">Border Patrol</option>
-                <option value="DEA">DEA</option>
-                <option value="Other Federal">Other Federal</option>
-                <option value="Unknown">Unknown</option>
-              </select>
-            </div>
-          </div>
-
           <div className="form-group">
-            <label className="form-label">Date Observed *</label>
-            <input 
-              type="date" 
-              className="form-input"
-              value={formData.date_observed}
-              onChange={(e) => handleFormChange('date_observed', e.target.value)}
+            <label className="form-label">Type of Report *</label>
+            <select 
+              className="form-select"
+              value={checkpointType}
+              onChange={e => setCheckpointType(e.target.value)}
               required
-            />
+            >
+              <option value="unofficial">Unofficial</option>
+              <option value="official">Official</option>
+            </select>
           </div>
-
-          <div className="form-group">
-            <label className="form-label">Details</label>
-            <textarea 
-              className="form-textarea" 
-              placeholder="Stopping every car, questions asked, documents requested, etc."
-              value={formData.details}
-              onChange={(e) => handleFormChange('details', e.target.value)}
-            />
-          </div>
-
-          <div className="form-checkbox-group">
-            <input 
-              type="checkbox" 
-              id="using_technology" 
-              className="form-checkbox"
-              checked={formData.using_technology}
-              onChange={(e) => handleFormChange('using_technology', e.target.checked)}
-            />
-            <label htmlFor="using_technology" className="form-checkbox-label">
-              Using technology (drones, license plate readers, scanners)
-            </label>
-          </div>
-
+          {checkpointType === 'unofficial' && (
+            <>
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label">Type of Checkpoint *</label>
+                  <select 
+                    className="form-select"
+                    value={formData.checkpoint_type}
+                    onChange={(e) => handleFormChange('checkpoint_type', e.target.value)}
+                    required
+                  >
+                    <option value="">Select type...</option>
+                    <option value="DUI/Sobriety">DUI/Sobriety</option>
+                    <option value="Immigration">Immigration</option>
+                    <option value="Drug Enforcement">Drug Enforcement</option>
+                    <option value="Traffic Safety">Traffic Safety</option>
+                    <option value="License/Registration">License/Registration</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Agency or Type *</label>
+                  <select 
+                    className="form-select"
+                    value={formData.agency}
+                    onChange={(e) => handleFormChange('agency', e.target.value)}
+                    required
+                  >
+                    <option value="">Select agency...</option>
+                    <option value="Local Police">Local Police</option>
+                    <option value="State Police">State Police</option>
+                    <option value="Sheriff's Department">Sheriff's Department</option>
+                    <option value="Border Patrol">Border Patrol</option>
+                    <option value="DEA">DEA</option>
+                    <option value="Other Federal">Other Federal</option>
+                    <option value="Unknown">Unknown</option>
+                  </select>
+                </div>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Date Observed *</label>
+                <input 
+                  type="date" 
+                  className="form-input"
+                  value={formData.date_observed}
+                  onChange={(e) => handleFormChange('date_observed', e.target.value)}
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Details</label>
+                <textarea 
+                  className="form-textarea" 
+                  placeholder="Stopping every car, questions asked, documents requested, etc."
+                  value={formData.details}
+                  onChange={(e) => handleFormChange('details', e.target.value)}
+                />
+              </div>
+              <div className="form-checkbox-group">
+                <input 
+                  type="checkbox" 
+                  id="using_technology" 
+                  className="form-checkbox"
+                  checked={formData.using_technology}
+                  onChange={(e) => handleFormChange('using_technology', e.target.checked)}
+                />
+                <label htmlFor="using_technology" className="form-checkbox-label">
+                  Using technology (drones, license plate readers, scanners)
+                </label>
+              </div>
+            </>
+          )}
+          {checkpointType === 'official' && (
+            <>
+              <div className="form-group">
+                <label className="form-label">Location (Address) *</label>
+                <input
+                  className="form-input"
+                  type="text"
+                  value={formData.location}
+                  onChange={e => handleFormChange('location', e.target.value)}
+                  required={checkpointType === 'official'}
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Date *</label>
+                <input 
+                  type="date" 
+                  className="form-input"
+                  value={formData.date}
+                  onChange={(e) => handleFormChange('date', e.target.value)}
+                  required={checkpointType === 'official'}
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Verification *</label>
+                <select
+                  className="form-select"
+                  value={formData.verification}
+                  onChange={e => handleFormChange('verification', e.target.value)}
+                  required={checkpointType === 'official'}
+                >
+                  <option value="">Select verification...</option>
+                  <option value="POGO">POGO</option>
+                  <option value="News">News</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Description</label>
+                <textarea
+                  className="form-textarea"
+                  value={formData.description}
+                  onChange={e => handleFormChange('description', e.target.value)}
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Agency *</label>
+                <select 
+                  className="form-select"
+                  value={formData.agency}
+                  onChange={(e) => handleFormChange('agency', e.target.value)}
+                  required
+                >
+                  <option value="">Select agency...</option>
+                  <option value="Local Police">Local Police</option>
+                  <option value="State Police">State Police</option>
+                  <option value="Sheriff's Department">Sheriff's Department</option>
+                  <option value="Border Patrol">Border Patrol</option>
+                  <option value="DEA">DEA</option>
+                  <option value="Other Federal">Other Federal</option>
+                  <option value="Unknown">Unknown</option>
+                </select>
+              </div>
+              <div className="form-checkbox-group">
+                <input 
+                  type="checkbox" 
+                  id="using_technology" 
+                  className="form-checkbox"
+                  checked={formData.using_technology}
+                  onChange={(e) => handleFormChange('using_technology', e.target.checked)}
+                />
+                <label htmlFor="using_technology" className="form-checkbox-label">
+                  Using technology (drones, license plate readers, scanners)
+                </label>
+              </div>
+            </>
+          )}
           <button 
             type="submit" 
             className="btn-submit"
-            disabled={!formData.checkpoint_type || !formData.agency || !formData.date_observed}
+            disabled={
+              (checkpointType === 'unofficial' && (!formData.checkpoint_type || !formData.agency || !formData.date_observed)) ||
+              (checkpointType === 'official' && (!formData.location || !formData.date || !formData.verification || !formData.agency))
+            }
           >
             Submit Report
           </button>
@@ -1036,6 +1229,45 @@ const ReportMap = () => {
               </div>
             )}
             
+            {selectedCheckpoint.using_technology && (
+              <div className="info-field">
+                <div className="info-field-label">Technology Used:</div>
+                <div className="info-field-value">Yes</div>
+              </div>
+            )}
+          </>
+        )}
+        
+        {selectedCheckpoint?.type === 'official' && (
+          <>
+            <h2 className="info-title" style={{ color: '#2ecc40' }}>Official Checkpoint</h2>
+            <div className="coordinates-display">
+              <strong>Location:</strong>
+              Lat: {selectedCheckpoint.lat.toFixed(6)}<br />
+              Lng: {selectedCheckpoint.lng.toFixed(6)}
+            </div>
+            <div className="info-field">
+              <div className="info-field-label">Address:</div>
+              <div className="info-field-value">{selectedCheckpoint.location}</div>
+            </div>
+            <div className="info-field">
+              <div className="info-field-label">Date:</div>
+              <div className="info-field-value">{selectedCheckpoint.date}</div>
+            </div>
+            <div className="info-field">
+              <div className="info-field-label">Verification:</div>
+              <div className="info-field-value">{selectedCheckpoint.verification}</div>
+            </div>
+            {selectedCheckpoint.description && (
+              <div className="info-field">
+                <div className="info-field-label">Description:</div>
+                <div className="info-field-value">{selectedCheckpoint.description}</div>
+              </div>
+            )}
+            <div className="info-field">
+              <div className="info-field-label">Agency:</div>
+              <div className="info-field-value">{selectedCheckpoint.agency}</div>
+            </div>
             {selectedCheckpoint.using_technology && (
               <div className="info-field">
                 <div className="info-field-label">Technology Used:</div>
