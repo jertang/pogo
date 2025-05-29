@@ -13,6 +13,7 @@ const ReportMap = () => {
   const mapContainerRef = useRef(null)
   const mapRef = useRef(null)
   const tempMarkerRef = useRef(null)
+  const searchMarkerRef = useRef(null)
   const geojsonRef = useRef({
     type: 'FeatureCollection',
     features: [],
@@ -42,6 +43,21 @@ const ReportMap = () => {
     description: '',
     date: '', // for official
   })
+  const [visibleLayers, setVisibleLayers] = useState({
+    borderStations: true,
+    userReports: true,
+    official: true,
+  })
+  // Official date slider state
+  const [officialDateLimits, setOfficialDateLimits] = useState(['', ''])
+  const [officialDateRange, setOfficialDateRange] = useState(['', ''])
+  // Unofficial date slider state
+  const [unofficialDateLimits, setUnofficialDateLimits] = useState(['', ''])
+  const [unofficialDateRange, setUnofficialDateRange] = useState(['', ''])
+
+  // Store original features for filtering
+  const originalUserReportsRef = useRef([])
+  const originalOfficialCheckpointsRef = useRef([])
 
   useEffect(() => {
     // custom styles for map and sidebar
@@ -431,6 +447,48 @@ const ReportMap = () => {
         color: #999;
         font-size: 13px;
       }
+      
+      .filter-sidebar {
+        width: 240px;
+        background: white;
+        box-shadow: 2px 0 10px rgba(0, 0, 0, 0.08);
+        padding: 20px 18px 18px 18px;
+        position: fixed;
+        top: 50%;
+        left: 0;
+        transform: translateY(-50%);
+        transition: left 0.3s ease;
+        max-height: 85vh;
+        overflow-y: auto;
+        z-index: 1001;
+        border-radius: 0 8px 8px 0;
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+      }
+      .filter-title {
+        font-size: 17px;
+        font-weight: 600;
+        margin-bottom: 12px;
+        color: #333;
+      }
+      .filter-checkbox-group {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .filter-checkbox-label {
+        font-size: 14px;
+        color: #444;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+      }
+      .filter-checkbox {
+        transform: scale(1.2);
+        margin-right: 8px;
+      }
     `
     document.head.appendChild(style)
 
@@ -467,9 +525,21 @@ const ReportMap = () => {
           coordinates: [record.lng, record.lat],
         },
       }))
-
-      geojsonRef.current.features.push(...features)
+      originalUserReportsRef.current = features
+      geojsonRef.current.features = features
       map.getSource('places')?.setData(geojsonRef.current)
+
+      // Compute min/max date for unofficial
+      const dates = features.map(f => f.properties.date_observed).filter(Boolean)
+      if (dates.length > 0) {
+        const min = dates.reduce((a, b) => a < b ? a : b)
+        const max = dates.reduce((a, b) => a > b ? a : b)
+        setUnofficialDateLimits([min, max])
+        setUnofficialDateRange([min, max])
+      } else {
+        setUnofficialDateLimits(['', ''])
+        setUnofficialDateRange(['', ''])
+      }
     }
 
     const loadBorderStations = async () => {
@@ -522,11 +592,23 @@ const ReportMap = () => {
             coordinates: [checkpoint.longitude, checkpoint.latitude],
           },
         }))
+        originalOfficialCheckpointsRef.current = features
         if (mapRef.current && mapRef.current.getSource('official_checkpoints')) {
           mapRef.current.getSource('official_checkpoints').setData({
             type: 'FeatureCollection',
             features,
           })
+        }
+        // Compute min/max date for official
+        const dates = features.map(f => f.properties.date).filter(Boolean)
+        if (dates.length > 0) {
+          const min = dates.reduce((a, b) => a < b ? a : b)
+          const max = dates.reduce((a, b) => a > b ? a : b)
+          setOfficialDateLimits([min, max])
+          setOfficialDateRange([min, max])
+        } else {
+          setOfficialDateLimits(['', ''])
+          setOfficialDateRange(['', ''])
         }
       } catch (error) {
         console.error('Error loading official checkpoints:', error)
@@ -549,7 +631,7 @@ const ReportMap = () => {
           'circle-radius': 8,
           'circle-color': '#B42222', // Red
           'circle-stroke-width': 2,
-          'circle-stroke-color': '#fff',
+          'circle-stroke-color': '#000',
         },
       })
 
@@ -566,7 +648,7 @@ const ReportMap = () => {
           'circle-radius': 8,
           'circle-color': '#0047AB', // Blue
           'circle-stroke-width': 2,
-          'circle-stroke-color': '#fff',
+          'circle-stroke-color': '#000',
         },
       })
 
@@ -583,7 +665,7 @@ const ReportMap = () => {
           'circle-radius': 8,
           'circle-color': '#2ecc40', // Green
           'circle-stroke-width': 2,
-          'circle-stroke-color': '#fff',
+          'circle-stroke-color': '#000',
         },
       })
 
@@ -619,6 +701,11 @@ const ReportMap = () => {
         </div>
       `
       map.getContainer().appendChild(legend)
+
+      // Set initial visibility
+      map.setLayoutProperty('placesLayer', 'visibility', visibleLayers.userReports ? 'visible' : 'none')
+      map.setLayoutProperty('borderStationsLayer', 'visibility', visibleLayers.borderStations ? 'visible' : 'none')
+      map.setLayoutProperty('officialCheckpointsLayer', 'visibility', visibleLayers.official ? 'visible' : 'none')
     })
 
     let popup = null
@@ -793,7 +880,7 @@ const ReportMap = () => {
       // Create new temporary marker
       tempMarkerRef.current = new maplibregl.Marker({ 
         color: '#ff6b6b',
-        scale: 1.2
+        scale: 0.8
       })
         .setLngLat(e.lngLat)
         .addTo(map)
@@ -815,6 +902,70 @@ const ReportMap = () => {
       map.remove()
     }
   }, [])
+
+  // Date filtering effect for both sliders
+  useEffect(() => {
+    const map = mapRef.current
+    // Filter user reports (unofficial)
+    let filteredUserReports = originalUserReportsRef.current
+    if (unofficialDateRange[0] && unofficialDateRange[1]) {
+      filteredUserReports = filteredUserReports.filter(f => {
+        const d = f.properties.date_observed
+        if (!d) return false
+        return d >= unofficialDateRange[0] && d <= unofficialDateRange[1]
+      })
+    }
+    geojsonRef.current.features = filteredUserReports
+    if (map && map.getSource('places')) {
+      map.getSource('places').setData(geojsonRef.current)
+    }
+    // Filter official checkpoints
+    let filteredOfficial = originalOfficialCheckpointsRef.current
+    if (officialDateRange[0] && officialDateRange[1]) {
+      filteredOfficial = filteredOfficial.filter(f => {
+        const d = f.properties.date
+        if (!d) return false
+        return d >= officialDateRange[0] && d <= officialDateRange[1]
+      })
+    }
+    if (map && map.getSource('official_checkpoints')) {
+      map.getSource('official_checkpoints').setData({
+        type: 'FeatureCollection',
+        features: filteredOfficial,
+      })
+    }
+  }, [unofficialDateRange, officialDateRange])
+
+  // Helper for slider step (days)
+  function getDateStep(min, max) {
+    if (!min || !max) return 1
+    const diff = (new Date(max) - new Date(min)) / (1000 * 60 * 60 * 24)
+    return diff < 1 ? 1 : 1
+  }
+  // Helper for slider marks
+  function formatDate(date) {
+    if (!date) return ''
+    return date
+  }
+
+  // Update map layer visibility when visibleLayers changes
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+    if (map.getLayer('placesLayer')) {
+      map.setLayoutProperty('placesLayer', 'visibility', visibleLayers.userReports ? 'visible' : 'none')
+    }
+    if (map.getLayer('borderStationsLayer')) {
+      map.setLayoutProperty('borderStationsLayer', 'visibility', visibleLayers.borderStations ? 'visible' : 'none')
+    }
+    if (map.getLayer('officialCheckpointsLayer')) {
+      map.setLayoutProperty('officialCheckpointsLayer', 'visibility', visibleLayers.official ? 'visible' : 'none')
+    }
+  }, [visibleLayers])
+
+  const handleLayerToggle = (layer) => {
+    setVisibleLayers(prev => ({ ...prev, [layer]: !prev[layer] }))
+  }
 
   // Search functionality
   const searchLocation = async (query) => {
@@ -866,8 +1017,18 @@ const ReportMap = () => {
         zoom: 14,
         duration: 2000
       })
+      // Remove previous search marker if exists
+      if (searchMarkerRef.current) {
+        searchMarkerRef.current.remove()
+      }
+      // Add a new marker for the searched address
+      searchMarkerRef.current = new maplibregl.Marker({
+        color: '#a259f7', // purple
+        scale: 0.8
+      })
+        .setLngLat([result.lng, result.lat])
+        .addTo(map)
     }
-    
     setSearchQuery(result.name)
     setShowSearchResults(false)
   }
@@ -944,6 +1105,112 @@ const ReportMap = () => {
 
   return (
     <div className="report-container">
+      <div className="filter-sidebar">
+        <div className="filter-title">Show on Map</div>
+        <div className="filter-checkbox-group">
+          <label className="filter-checkbox-label">
+            <input
+              type="checkbox"
+              className="filter-checkbox"
+              checked={visibleLayers.userReports}
+              onChange={() => handleLayerToggle('userReports')}
+            />
+            User Reported Checkpoints
+          </label>
+          <label className="filter-checkbox-label">
+            <input
+              type="checkbox"
+              className="filter-checkbox"
+              checked={visibleLayers.official}
+              onChange={() => handleLayerToggle('official')}
+            />
+            Official Checkpoints
+          </label>
+          <label className="filter-checkbox-label">
+            <input
+              type="checkbox"
+              className="filter-checkbox"
+              checked={visibleLayers.borderStations}
+              onChange={() => handleLayerToggle('borderStations')}
+            />
+            Border Patrol Stations
+          </label>
+        </div>
+        {/* Unofficial Date Slider */}
+        <div className="form-group" style={{marginTop: '18px'}}>
+          <label className="form-label">Unofficial Date Range</label>
+          {unofficialDateLimits[0] && unofficialDateLimits[1] && unofficialDateLimits[0] !== unofficialDateLimits[1] ? (
+            <>
+              <input
+                type="date"
+                className="form-input"
+                min={unofficialDateLimits[0]}
+                max={unofficialDateLimits[1]}
+                value={unofficialDateRange[0]}
+                onChange={e => setUnofficialDateRange([e.target.value, unofficialDateRange[1]])}
+                style={{marginBottom: 6}}
+              />
+              <input
+                type="date"
+                className="form-input"
+                min={unofficialDateLimits[0]}
+                max={unofficialDateLimits[1]}
+                value={unofficialDateRange[1]}
+                onChange={e => setUnofficialDateRange([unofficialDateRange[0], e.target.value])}
+              />
+              <div style={{fontSize: 12, color: '#888', marginTop: 2}}>
+                {formatDate(unofficialDateRange[0])} to {formatDate(unofficialDateRange[1])}
+              </div>
+            </>
+          ) : unofficialDateLimits[0] && unofficialDateLimits[1] ? (
+            <input
+              type="date"
+              className="form-input"
+              value={unofficialDateLimits[0]}
+              disabled
+            />
+          ) : (
+            <div style={{fontSize: 12, color: '#888'}}>No unofficial checkpoint dates</div>
+          )}
+        </div>
+        {/* Official Date Slider */}
+        <div className="form-group">
+          <label className="form-label">Official Date Range</label>
+          {officialDateLimits[0] && officialDateLimits[1] && officialDateLimits[0] !== officialDateLimits[1] ? (
+            <>
+              <input
+                type="date"
+                className="form-input"
+                min={officialDateLimits[0]}
+                max={officialDateLimits[1]}
+                value={officialDateRange[0]}
+                onChange={e => setOfficialDateRange([e.target.value, officialDateRange[1]])}
+                style={{marginBottom: 6}}
+              />
+              <input
+                type="date"
+                className="form-input"
+                min={officialDateLimits[0]}
+                max={officialDateLimits[1]}
+                value={officialDateRange[1]}
+                onChange={e => setOfficialDateRange([officialDateRange[0], e.target.value])}
+              />
+              <div style={{fontSize: 12, color: '#888', marginTop: 2}}>
+                {formatDate(officialDateRange[0])} to {formatDate(officialDateRange[1])}
+              </div>
+            </>
+          ) : officialDateLimits[0] && officialDateLimits[1] ? (
+            <input
+              type="date"
+              className="form-input"
+              value={officialDateLimits[0]}
+              disabled
+            />
+          ) : (
+            <div style={{fontSize: 12, color: '#888'}}>No official checkpoint dates</div>
+          )}
+        </div>
+      </div>
       <div className="map-container" ref={mapContainerRef}>
         <div className="search-container">
           <input
