@@ -22,6 +22,10 @@ const ReportMap = () => {
     type: 'FeatureCollection',
     features: [],
   })
+  const allPointsRef = useRef({
+    type: 'FeatureCollection',
+    features: [],
+  })
 
   const [showForm, setShowForm] = useState(false)
   const [showCheckpointInfo, setShowCheckpointInfo] = useState(false)
@@ -502,13 +506,25 @@ const ReportMap = () => {
 
     mapRef.current = map
 
+    // Helper to update allPointsRef and map source
+    const updateAllPointsSource = (userFeatures, borderFeatures, officialFeatures) => {
+      const allFeatures = [
+        ...userFeatures.map(f => ({ ...f, properties: { ...f.properties, point_type: 'unofficial' } })),
+        ...borderFeatures.map(f => ({ ...f, properties: { ...f.properties, point_type: 'border' } })),
+        ...officialFeatures.map(f => ({ ...f, properties: { ...f.properties, point_type: 'official' } })),
+      ]
+      allPointsRef.current.features = allFeatures
+      if (map.getSource('all_points')) {
+        map.getSource('all_points').setData(allPointsRef.current)
+      }
+    }
+
     const loadCheckpointReports = async () => {
       const { data, error } = await supabase.from('checkpoint_reports').select('*')
       if (error) {
         console.error('Error fetching checkpoint reports:', error)
         return
       }
-
       const features = data.map((record) => ({
         type: 'Feature',
         properties: {
@@ -540,6 +556,9 @@ const ReportMap = () => {
         setUnofficialDateLimits(['', ''])
         setUnofficialDateRange(['', ''])
       }
+
+      // After loading all, update all_points
+      updateAllPointsSource(features, legalCheckpointsRef.current.features, originalOfficialCheckpointsRef.current)
     }
 
     const loadBorderStations = async () => {
@@ -548,7 +567,6 @@ const ReportMap = () => {
         console.error('Error fetching border stations:', error)
         return
       }
-
       const features = data.map((record) => ({
         type: 'Feature',
         properties: {
@@ -564,9 +582,10 @@ const ReportMap = () => {
           coordinates: [record.long, record.lat],
         },
       }))
-
       legalCheckpointsRef.current.features = features
       map.getSource('border_stations')?.setData(legalCheckpointsRef.current)
+      // After loading all, update all_points
+      updateAllPointsSource(originalUserReportsRef.current, features, originalOfficialCheckpointsRef.current)
     }
 
     const loadOfficialCheckpoints = async () => {
@@ -599,6 +618,7 @@ const ReportMap = () => {
             features,
           })
         }
+
         // Compute min/max date for official
         const dates = features.map(f => f.properties.date).filter(Boolean)
         if (dates.length > 0) {
@@ -610,6 +630,9 @@ const ReportMap = () => {
           setOfficialDateLimits(['', ''])
           setOfficialDateRange(['', ''])
         }
+
+        // After loading all, update all_points
+        updateAllPointsSource(originalUserReportsRef.current, legalCheckpointsRef.current.features, features)
       } catch (error) {
         console.error('Error loading official checkpoints:', error)
       }
@@ -618,7 +641,7 @@ const ReportMap = () => {
     map.on('load', () => {
       map.resize()
 
-      // User Reports (Unofficial)
+      // User Reports (Unofficial) - Keep but hide since we use clustered version
       map.addSource('places', {
         type: 'geojson',
         data: geojsonRef.current,
@@ -633,9 +656,12 @@ const ReportMap = () => {
           'circle-stroke-width': 2,
           'circle-stroke-color': '#000',
         },
+        layout: {
+          'visibility': 'none' // Hide since we use clustered version
+        }
       })
 
-      // Border Stations
+      // Border Stations - Keep but hide since we use clustered version
       map.addSource('border_stations', {
         type: 'geojson',
         data: legalCheckpointsRef.current,
@@ -650,9 +676,12 @@ const ReportMap = () => {
           'circle-stroke-width': 2,
           'circle-stroke-color': '#000',
         },
+        layout: {
+          'visibility': 'none' // Hide since we use clustered version
+        }
       })
 
-      // Official Checkpoints
+      // Official Checkpoints - Keep but hide since we use clustered version
       map.addSource('official_checkpoints', {
         type: 'geojson',
         data: { type: 'FeatureCollection', features: [] },
@@ -667,6 +696,128 @@ const ReportMap = () => {
           'circle-stroke-width': 2,
           'circle-stroke-color': '#000',
         },
+        layout: {
+          'visibility': 'none' // Hide since we use clustered version
+        }
+      })
+
+      // Add all_points source with clustering and clusterProperties
+      map.addSource('all_points', {
+        type: 'geojson',
+        data: allPointsRef.current,
+        cluster: true,
+        clusterMaxZoom: 14,
+        clusterRadius: 50,
+        clusterProperties: {
+          unofficial_count: [
+            '+',
+            ['case', ['==', ['get', 'point_type'], 'unofficial'], 1, 0]
+          ],
+          official_count: [
+            '+',
+            ['case', ['==', ['get', 'point_type'], 'official'], 1, 0]
+          ],
+          border_count: [
+            '+',
+            ['case', ['==', ['get', 'point_type'], 'border'], 1, 0]
+          ]
+        }
+      })
+
+      // Cluster circles (color by dominant type)
+      map.addLayer({
+        id: 'all_points_clusters',
+        type: 'circle',
+        source: 'all_points',
+        filter: ['has', 'point_count'],
+        paint: {
+          'circle-color': [
+            'case',
+            ['>', ['get', 'unofficial_count'], ['max', ['get', 'official_count'], ['get', 'border_count']]], '#B42222', // red
+            ['>', ['get', 'official_count'], ['max', ['get', 'unofficial_count'], ['get', 'border_count']]], '#2ecc40', // green
+            ['>', ['get', 'border_count'], ['max', ['get', 'unofficial_count'], ['get', 'official_count']]], '#0047AB', // blue
+            '#888' // fallback gray
+          ],
+          'circle-radius': [
+            'step',
+            ['get', 'point_count'],
+            18, 10, 24, 30, 30
+          ],
+          'circle-stroke-width': 2,
+          'circle-stroke-color': '#fff',
+        }
+      })
+      // Cluster count label
+      map.addLayer({
+        id: 'all_points_cluster_count',
+        type: 'symbol',
+        source: 'all_points',
+        filter: ['has', 'point_count'],
+        layout: {
+          'text-field': '{point_count_abbreviated}',
+          'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+          'text-size': 13
+        },
+        paint: {
+          'text-color': '#222'
+        }
+      })
+      // Unclustered points (color by type)
+      map.addLayer({
+        id: 'all_points_unclustered',
+        type: 'circle',
+        source: 'all_points',
+        filter: ['!', ['has', 'point_count']],
+        paint: {
+          'circle-radius': 8,
+          'circle-color': [
+            'match',
+            ['get', 'point_type'],
+            'unofficial', '#B42222',
+            'official', '#2ecc40',
+            'border', '#0047AB',
+            '#888'
+          ],
+          'circle-stroke-width': 2,
+          'circle-stroke-color': '#000',
+        }
+      })
+
+      // Cluster click: zoom in or show popup with breakdown
+      map.on('click', 'all_points_clusters', function (e) {
+        const features = map.queryRenderedFeatures(e.point, { layers: ['all_points_clusters'] })
+        if (!features.length) return
+        const cluster = features[0]
+        const coordinates = cluster.geometry.coordinates.slice()
+        const props = cluster.properties
+        // Show popup with breakdown
+        const unofficial = props.unofficial_count || 0
+        const official = props.official_count || 0
+        const border = props.border_count || 0
+        new maplibregl.Popup()
+          .setLngLat(coordinates)
+          .setHTML(`
+            <div style="font-size:14px;font-weight:600;margin-bottom:6px;">Cluster Breakdown</div>
+            <div style="color:#B42222;">●</span> Unofficial: <b>${unofficial}</b></div>
+            <div style="color:#2ecc40;">●</span> Official: <b>${official}</b></div>
+            <div style="color:#0047AB;">●</span> Border: <b>${border}</b></div>
+            <div style="margin-top:6px;font-size:12px;color:#888;">Click again to zoom in</div>
+          `)
+          .addTo(map)
+        // On double click, zoom in
+        map.once('dblclick', function () {
+          map.getSource('all_points').getClusterExpansionZoom(cluster.id, function (err, zoom) {
+            if (err) return
+            map.easeTo({ center: coordinates, zoom })
+          })
+        })
+      })
+      // Change cursor on cluster hover
+      map.on('mouseenter', 'all_points_clusters', () => {
+        map.getCanvas().style.cursor = 'pointer'
+      })
+      map.on('mouseleave', 'all_points_clusters', () => {
+        map.getCanvas().style.cursor = ''
       })
 
       loadCheckpointReports()
@@ -709,6 +860,59 @@ const ReportMap = () => {
     })
 
     let popup = null
+
+    map.on('mouseenter', 'all_points_unclustered', (e) => {
+      map.getCanvas().style.cursor = 'pointer'
+      const { coordinates } = e.features[0].geometry
+      const props = e.features[0].properties
+      const pointType = props.point_type
+      
+      let popupContent = ''
+      
+      if (pointType === 'unofficial') {
+        popupContent = `
+          <div class="popup-content">
+            <h4 class="popup-title user-report">User Reported Checkpoint</h4>
+            <div class="popup-field"><strong>Type:</strong> ${props.checkpoint_type}</div>
+            <div class="popup-field"><strong>Agency:</strong> ${props.agency}</div>
+            <div class="popup-field"><strong>Date:</strong> ${props.date_observed}</div>
+            ${props.details ? `<div class="popup-field"><strong>Details:</strong> ${props.details}</div>` : ''}
+            ${props.using_technology ? `<div class="popup-field"><strong>Technology Used:</strong> Yes</div>` : ''}
+          </div>
+        `
+      } else if (pointType === 'border') {
+        popupContent = `
+          <div class="popup-content">
+            <h3 class="popup-title border-station">${props.checkpoint_name}</h3>
+            <div class="popup-field"><strong>Location:</strong> ${props.city}, ${props.state}</div>
+            ${props.description ? `<div class="popup-field"><strong>Description:</strong> ${props.description}</div>` : ''}
+            <div class="popup-subtitle">Border Patrol Station</div>
+          </div>
+        `
+      } else if (pointType === 'official') {
+        popupContent = `
+          <div class="popup-content">
+            <h4 class="popup-title" style="color:#2ecc40;">Official Checkpoint</h4>
+            <div class="popup-field"><strong>Location:</strong> ${props.location}</div>
+            <div class="popup-field"><strong>Date:</strong> ${props.date}</div>
+            <div class="popup-field"><strong>Verification:</strong> ${props.verification}</div>
+            ${props.description ? `<div class="popup-field"><strong>Description:</strong> ${props.description}</div>` : ''}
+            <div class="popup-field"><strong>Agency:</strong> ${props.agency}</div>
+            ${props.using_technology ? `<div class="popup-field"><strong>Technology Used:</strong> Yes</div>` : ''}
+          </div>
+        `
+      }
+
+      popup = new maplibregl.Popup()
+        .setLngLat(coordinates)
+        .setHTML(popupContent)
+        .addTo(map)
+    })
+
+    map.on('mouseleave', 'all_points_unclustered', () => {
+      map.getCanvas().style.cursor = ''
+      popup?.remove()
+    })
 
     map.on('mouseenter', 'placesLayer', (e) => {
       map.getCanvas().style.cursor = 'pointer'
@@ -787,23 +991,54 @@ const ReportMap = () => {
       // Close any popups
       popup?.remove()
 
-      // Check if clicking on a border station
-      const borderStationFeatures = map.queryRenderedFeatures(e.point, {
-        layers: ['borderStationsLayer']
+      // Check if clicking on a clustered point (unclustered individual points)
+      const pointFeatures = map.queryRenderedFeatures(e.point, {
+        layers: ['all_points_unclustered']
       })
 
-      if (borderStationFeatures.length > 0) {
-        // Clicked on a border station
-        const feature = borderStationFeatures[0]
-        setSelectedCheckpoint({
-          type: 'border_station',
-          name: feature.properties.checkpoint_name,
-          city: feature.properties.city,
-          state: feature.properties.state,
-          description: feature.properties.description,
-          lat: feature.geometry.coordinates[1],
-          lng: feature.geometry.coordinates[0]
-        })
+      if (pointFeatures.length > 0) {
+        const feature = pointFeatures[0]
+        const pointType = feature.properties.point_type
+        
+        if (pointType === 'border') {
+          // Clicked on a border station
+          setSelectedCheckpoint({
+            type: 'border_station',
+            name: feature.properties.checkpoint_name,
+            city: feature.properties.city,
+            state: feature.properties.state,
+            description: feature.properties.description,
+            lat: feature.geometry.coordinates[1],
+            lng: feature.geometry.coordinates[0]
+          })
+        } else if (pointType === 'unofficial') {
+          // Clicked on a user report
+          setSelectedCheckpoint({
+            type: 'user_report',
+            checkpoint_type: feature.properties.checkpoint_type,
+            agency: feature.properties.agency,
+            date_observed: feature.properties.date_observed,
+            details: feature.properties.details,
+            using_technology: feature.properties.using_technology,
+            lat: feature.geometry.coordinates[1],
+            lng: feature.geometry.coordinates[0],
+            created_at: feature.properties.created_at
+          })
+        } else if (pointType === 'official') {
+          // Clicked on an official checkpoint
+          setSelectedCheckpoint({
+            type: 'official',
+            location: feature.properties.location,
+            date: feature.properties.date,
+            verification: feature.properties.verification,
+            description: feature.properties.description,
+            agency: feature.properties.agency,
+            using_technology: feature.properties.using_technology,
+            lat: feature.geometry.coordinates[1],
+            lng: feature.geometry.coordinates[0],
+          })
+        }
+        
         setShowCheckpointInfo(true)
         setShowForm(false)
         
@@ -814,62 +1049,7 @@ const ReportMap = () => {
         return
       }
 
-      // Check if clicking on a user report
-      const reportFeatures = map.queryRenderedFeatures(e.point, {
-        layers: ['placesLayer']
-      })
-
-      if (reportFeatures.length > 0) {
-        // Clicked on a user report
-        const feature = reportFeatures[0]
-        setSelectedCheckpoint({
-          type: 'user_report',
-          checkpoint_type: feature.properties.checkpoint_type,
-          agency: feature.properties.agency,
-          date_observed: feature.properties.date_observed,
-          details: feature.properties.details,
-          using_technology: feature.properties.using_technology,
-          lat: feature.geometry.coordinates[1],
-          lng: feature.geometry.coordinates[0],
-          created_at: feature.properties.created_at
-        })
-        setShowCheckpointInfo(true)
-        setShowForm(false)
-        
-        if (tempMarkerRef.current) {
-          tempMarkerRef.current.remove()
-          tempMarkerRef.current = null
-        }
-        return
-      }
-
-      // Check if clicking on an official checkpoint
-      const officialFeatures = map.queryRenderedFeatures(e.point, {
-        layers: ['officialCheckpointsLayer']
-      })
-      if (officialFeatures.length > 0) {
-        const feature = officialFeatures[0]
-        setSelectedCheckpoint({
-          type: 'official',
-          location: feature.properties.location,
-          date: feature.properties.date,
-          verification: feature.properties.verification,
-          description: feature.properties.description,
-          agency: feature.properties.agency,
-          using_technology: feature.properties.using_technology,
-          lat: feature.geometry.coordinates[1],
-          lng: feature.geometry.coordinates[0],
-        })
-        setShowCheckpointInfo(true)
-        setShowForm(false)
-        if (tempMarkerRef.current) {
-          tempMarkerRef.current.remove()
-          tempMarkerRef.current = null
-        }
-        return
-      }
-
-      // Clicked on map (not on an existing point)
+      // Clicked on map (not on an existing point or cluster)
       setShowCheckpointInfo(false)
       
       // Remove existing temporary marker
@@ -903,39 +1083,6 @@ const ReportMap = () => {
     }
   }, [])
 
-  // Date filtering effect for both sliders
-  useEffect(() => {
-    const map = mapRef.current
-    // Filter user reports (unofficial)
-    let filteredUserReports = originalUserReportsRef.current
-    if (unofficialDateRange[0] && unofficialDateRange[1]) {
-      filteredUserReports = filteredUserReports.filter(f => {
-        const d = f.properties.date_observed
-        if (!d) return false
-        return d >= unofficialDateRange[0] && d <= unofficialDateRange[1]
-      })
-    }
-    geojsonRef.current.features = filteredUserReports
-    if (map && map.getSource('places')) {
-      map.getSource('places').setData(geojsonRef.current)
-    }
-    // Filter official checkpoints
-    let filteredOfficial = originalOfficialCheckpointsRef.current
-    if (officialDateRange[0] && officialDateRange[1]) {
-      filteredOfficial = filteredOfficial.filter(f => {
-        const d = f.properties.date
-        if (!d) return false
-        return d >= officialDateRange[0] && d <= officialDateRange[1]
-      })
-    }
-    if (map && map.getSource('official_checkpoints')) {
-      map.getSource('official_checkpoints').setData({
-        type: 'FeatureCollection',
-        features: filteredOfficial,
-      })
-    }
-  }, [unofficialDateRange, officialDateRange])
-
   // Helper for slider step (days)
   function getDateStep(min, max) {
     if (!min || !max) return 1
@@ -952,16 +1099,51 @@ const ReportMap = () => {
   useEffect(() => {
     const map = mapRef.current
     if (!map) return
+    
+    // Filter all_points based on visible layers
+    let filteredUserReports = originalUserReportsRef.current
+    let filteredOfficial = originalOfficialCheckpointsRef.current
+    let filteredBorder = legalCheckpointsRef.current.features
+
+    // Apply date filtering
+    if (unofficialDateRange[0] && unofficialDateRange[1]) {
+      filteredUserReports = filteredUserReports.filter(f => {
+        const d = f.properties.date_observed
+        if (!d) return false
+        return d >= unofficialDateRange[0] && d <= unofficialDateRange[1]
+      })
+    }
+    if (officialDateRange[0] && officialDateRange[1]) {
+      filteredOfficial = filteredOfficial.filter(f => {
+        const d = f.properties.date
+        if (!d) return false
+        return d >= officialDateRange[0] && d <= officialDateRange[1]
+      })
+    }
+
+    // Apply layer visibility filtering
+    const allFeatures = [
+      ...(visibleLayers.userReports ? filteredUserReports.map(f => ({ ...f, properties: { ...f.properties, point_type: 'unofficial' } })) : []),
+      ...(visibleLayers.borderStations ? filteredBorder.map(f => ({ ...f, properties: { ...f.properties, point_type: 'border' } })) : []),
+      ...(visibleLayers.official ? filteredOfficial.map(f => ({ ...f, properties: { ...f.properties, point_type: 'official' } })) : []),
+    ]
+    
+    allPointsRef.current.features = allFeatures
+    if (map.getSource('all_points')) {
+      map.getSource('all_points').setData(allPointsRef.current)
+    }
+
+    // Keep the old individual layers hidden
     if (map.getLayer('placesLayer')) {
-      map.setLayoutProperty('placesLayer', 'visibility', visibleLayers.userReports ? 'visible' : 'none')
+      map.setLayoutProperty('placesLayer', 'visibility', 'none')
     }
     if (map.getLayer('borderStationsLayer')) {
-      map.setLayoutProperty('borderStationsLayer', 'visibility', visibleLayers.borderStations ? 'visible' : 'none')
+      map.setLayoutProperty('borderStationsLayer', 'visibility', 'none')
     }
     if (map.getLayer('officialCheckpointsLayer')) {
-      map.setLayoutProperty('officialCheckpointsLayer', 'visibility', visibleLayers.official ? 'visible' : 'none')
+      map.setLayoutProperty('officialCheckpointsLayer', 'visibility', 'none')
     }
-  }, [visibleLayers])
+  }, [visibleLayers, unofficialDateRange, officialDateRange])
 
   const handleLayerToggle = (layer) => {
     setVisibleLayers(prev => ({ ...prev, [layer]: !prev[layer] }))
