@@ -344,7 +344,7 @@ const ReportMap = () => {
       
       .click-instruction {
         position: absolute;
-        bottom: 80px;
+        bottom: 120px;
         right: 20px;
         background: rgba(102, 126, 234, 0.95);
         backdrop-filter: blur(10px);
@@ -367,9 +367,9 @@ const ReportMap = () => {
       
       .search-container {
         position: absolute;
-        top: 100px;
-        left: 20px;
-        z-index: 1000;
+        top: 20px; /* Just below the navbar */
+        left: 20px; /* Left edge */
+        z-index: 1500; /* High z-index to ensure visibility */
         width: 300px;
       }
       
@@ -459,7 +459,7 @@ const ReportMap = () => {
         padding: 20px 18px 18px 18px;
         position: fixed;
         top: 50%;
-        left: 0;
+        left: 30px;
         transform: translateY(-50%);
         transition: left 0.3s ease;
         max-height: 85vh;
@@ -790,25 +790,14 @@ const ReportMap = () => {
         const cluster = features[0]
         const coordinates = cluster.geometry.coordinates.slice()
         const props = cluster.properties
-        // Show popup with breakdown
-        const unofficial = props.unofficial_count || 0
-        const official = props.official_count || 0
-        const border = props.border_count || 0
-        new maplibregl.Popup()
-          .setLngLat(coordinates)
-          .setHTML(`
-            <div style="font-size:14px;font-weight:600;margin-bottom:6px;">Cluster Breakdown</div>
-            <div style="color:#B42222;">●</span> Unofficial: <b>${unofficial}</b></div>
-            <div style="color:#2ecc40;">●</span> Official: <b>${official}</b></div>
-            <div style="color:#0047AB;">●</span> Border: <b>${border}</b></div>
-            <div style="margin-top:6px;font-size:12px;color:#888;">Click again to zoom in</div>
-          `)
-          .addTo(map)
-        // On double click, zoom in
-        map.once('dblclick', function () {
-          map.getSource('all_points').getClusterExpansionZoom(cluster.id, function (err, zoom) {
-            if (err) return
-            map.easeTo({ center: coordinates, zoom })
+        
+        // Zoom in on single click
+        map.getSource('all_points').getClusterExpansionZoom(cluster.id, function (err, zoom) {
+          if (err) return
+          map.easeTo({ 
+            center: coordinates, 
+            zoom: zoom,
+            duration: 500
           })
         })
       })
@@ -828,7 +817,7 @@ const ReportMap = () => {
       const legend = document.createElement('div')
       legend.className = 'map-legend'
       legend.style.position = 'absolute'
-      legend.style.bottom = '30px'
+      legend.style.bottom = '120px'
       legend.style.left = '30px'
       legend.style.background = 'white'
       legend.style.padding = '12px 18px'
@@ -990,6 +979,16 @@ const ReportMap = () => {
     map.on('click', (e) => {
       // Close any popups
       popup?.remove()
+
+      // Check if clicking on a cluster first
+      const clusterFeatures = map.queryRenderedFeatures(e.point, {
+        layers: ['all_points_clusters']
+      })
+      
+      if (clusterFeatures.length > 0) {
+        // Clicked on a cluster, don't show report form (cluster handler will take care of zooming)
+        return
+      }
 
       // Check if clicking on a clustered point (unclustered individual points)
       const pointFeatures = map.queryRenderedFeatures(e.point, {

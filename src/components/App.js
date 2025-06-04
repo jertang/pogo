@@ -16,7 +16,7 @@ function App(props) {
   return (
     <div>
       <NavBar />
-      <div className="container">
+      <div style={{ position: 'relative' }}>
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/about" element={<About />} />
@@ -33,4 +33,4 @@ function App(props) {
   );
 }
 
-export default App ;
+export default App;

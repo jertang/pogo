@@ -1,24 +1,10 @@
 import React from "react";
-import MapComponent from "../components/MapComponent";
+import OverviewMap from "../components/OverviewMap";
 
 export function Home() {
   return (
-    <div className="home" style={{ display: "flex", flexDirection: "column" }}>
-      <div style={{ height: "50vh", width: "100%" }}>
-        <MapComponent />
-      </div>
-      <div style={{ padding: "1rem", maxWidth: "800px", margin: "0 auto" }}>
-        <h1>Checkpoint Overview</h1>
-        <p>
-          This map shows current legal checkpoints and community-submitted reports.
-          Scroll and zoom to explore various locations. You can click on a map marker
-          to read more details.
-        </p>
-        <p>
-          Below you'll find detailed statistics and stories from people who have encountered
-          checkpoints. We encourage users to contribute their own reports to help keep this tool accurate and updated.
-        </p>
-      </div>
+    <div className="home" style={{ position: "relative", height: "100vh", width: "100%", marginTop: "-60px", zIndex: 1 }}>
+      <OverviewMap />
     </div>
   );
 }
