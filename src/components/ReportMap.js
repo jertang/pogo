@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import maplibregl from 'maplibre-gl'
 import { createClient } from '@supabase/supabase-js'
 import 'maplibre-gl/dist/maplibre-gl.css'
+import './ReportMap.css'   
 
 // Supabase setup
 const supabaseUrl = 'https://yybdwyflzpzgdqanrbpa.supabase.co'
@@ -64,437 +65,7 @@ const ReportMap = () => {
   const originalOfficialCheckpointsRef = useRef([])
 
   useEffect(() => {
-    // custom styles for map and sidebar
-    const style = document.createElement('style')
-    style.textContent = `
-      .report-container {
-        display: flex;
-        height: 100%;
-        width: 100%;
-      }
-      
-      .map-container {
-        width: 100%;
-        height: 100%;
-        position: relative;
-      }
-      
-      .form-sidebar {
-        width: 320px;
-        background: white;
-        box-shadow: -2px 0 10px rgba(0, 0, 0, 0.1);
-        padding: 20px;
-        position: fixed;
-        top: 50%;
-        right: -320px;
-        transform: translateY(-50%);
-        transition: right 0.3s ease;
-        max-height: 85vh;
-        overflow-y: auto;
-        z-index: 1000;
-        border-radius: 8px 0 0 8px;
-      }
-      
-      .form-sidebar.visible {
-        right: 0;
-      }
-      
-      .info-sidebar {
-        width: 300px;
-        background: white;
-        box-shadow: -2px 0 10px rgba(0, 0, 0, 0.1);
-        padding: 20px;
-        position: fixed;
-        top: 50%;
-        right: -300px;
-        transform: translateY(-50%);
-        transition: right 0.3s ease;
-        height: auto;
-        max-height: 85vh;
-        overflow-y: auto;
-        z-index: 1000;
-        border-radius: 8px 0 0 8px;
-      }
-      
-      .info-sidebar.visible {
-        right: 0;
-      }
-      
-      .info-title {
-        font-size: 18px;
-        font-weight: 600;
-        margin-bottom: 16px;
-      }
-      
-      .info-title.user-report {
-        color: #B42222;
-      }
-      
-      .info-title.border-station {
-        color: #0047AB;
-      }
-      
-      .info-field {
-        margin-bottom: 12px;
-      }
-      
-      .info-field-label {
-        font-weight: 500;
-        font-size: 13px;
-        color: #555;
-        margin-bottom: 4px;
-      }
-      
-      .info-field-value {
-        font-size: 14px;
-        color: #333;
-      }
-      
-      .form-title {
-        font-size: 18px;
-        font-weight: 600;
-        margin-bottom: 16px;
-        color: #333;
-        padding-right: 30px;
-      }
-      
-      .close-button {
-        position: absolute;
-        top: 16px;
-        right: 16px;
-        width: 26px;
-        height: 26px;
-        background: #f8f9fa;
-        border: 2px solid #e0e0e0;
-        border-radius: 50%;
-        color: #666;
-        font-size: 17px;
-        font-weight: bold;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        transition: all 0.2s ease;
-      }
-      
-      .close-button:hover {
-        background: #e9ecef;
-        border-color: #ccc;
-        color: #333;
-      }
-      
-      .coordinates-display {
-        background: #f8f9fa;
-        border: 2px solid #e0e0e0;
-        border-radius: 8px;
-        padding: 12px;
-        margin-bottom: 16px;
-        font-size: 13px;
-        color: #555;
-        text-align: center;
-      }
-      
-      .coordinates-display strong {
-        color: #333;
-        display: block;
-        margin-bottom: 4px;
-        font-size: 14px;
-      }
-      
-      .form-group {
-        margin-bottom: 14px;
-      }
-      
-      .form-row {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 12px;
-        margin-bottom: 14px;
-      }
-      
-      .form-label {
-        display: block;
-        margin-bottom: 6px;
-        font-size: 13px;
-        font-weight: 500;
-        color: #555;
-      }
-      
-      .form-input, .form-select, .form-textarea {
-        width: 100%;
-        padding: 10px 12px;
-        border: 2px solid #e0e0e0;
-        border-radius: 6px;
-        background: #f8f9fa;
-        color: #333;
-        font-size: 13px;
-        transition: all 0.3s ease;
-        box-sizing: border-box;
-      }
-      
-      .form-input::placeholder, .form-textarea::placeholder {
-        color: #999;
-      }
-      
-      .form-input:focus, .form-select:focus, .form-textarea:focus {
-        outline: none;
-        border-color: #667eea;
-        background: white;
-        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-      }
-      
-      .form-textarea {
-        min-height: 70px;
-        resize: vertical;
-      }
-      
-      .form-checkbox-group {
-        display: flex;
-        align-items: flex-start;
-        gap: 10px;
-        margin-bottom: 14px;
-      }
-      
-      .form-checkbox {
-        transform: scale(1.2);
-        margin-top: 2px;
-        flex-shrink: 0;
-      }
-      
-      .form-checkbox-label {
-        font-size: 12px;
-        color: #555;
-        line-height: 1.3;
-      }
-      
-      .btn-submit {
-        width: 100%;
-        padding: 12px;
-        background: linear-gradient(135deg, #667eea 0%, #65b6f7 100%);
-        border: none;
-        border-radius: 6px;
-        color: white;
-        font-weight: 600;
-        font-size: 14px;
-        cursor: pointer;
-        transition: all 0.3s ease;
-        margin-top: 12px;
-      }
-      
-      .btn-submit:hover:not(:disabled) {
-        transform: translateY(-1px);
-        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.5);
-      }
-      
-      .btn-submit:disabled {
-        opacity: 0.6;
-        cursor: not-allowed;
-      }
-      
-      /* Popup Styling */
-      .maplibregl-popup-content {
-        padding: 0 !important;
-        border-radius: 8px !important;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
-        max-width: 250px !important;
-      }
-      
-      .maplibregl-popup-close-button {
-        color: #666 !important;
-        font-size: 18px !important;
-        padding: 2px 6px !important;
-      }
-      
-      .popup-content {
-        padding: 12px;
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      }
-      
-      .popup-title {
-        font-size: 14px;
-        font-weight: 600;
-        margin: 0 0 8px 0;
-        color: #333;
-      }
-      
-      .popup-title.user-report {
-        color: #B42222;
-      }
-      
-      .popup-title.border-station {
-        color: #0047AB;
-      }
-      
-      .popup-field {
-        margin: 4px 0;
-        font-size: 12px;
-        line-height: 1.3;
-      }
-      
-      .popup-field strong {
-        color: #555;
-      }
-      
-      .popup-subtitle {
-        font-style: italic;
-        font-size: 11px;
-        color: #777;
-        margin-top: 8px;
-      }
-      
-      .click-instruction {
-        position: absolute;
-        bottom: 120px;
-        right: 20px;
-        background: rgba(102, 126, 234, 0.95);
-        backdrop-filter: blur(10px);
-        color: white;
-        padding: 12px 16px;
-        border-radius: 8px;
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-        font-size: 14px;
-        font-weight: 500;
-        z-index: 500;
-        max-width: 200px;
-        pointer-events: none;
-        border: 2px solid rgba(255, 255, 255, 0.2);
-      }
-      
-      .click-instruction-icon {
-        font-size: 16px;
-        margin-right: 6px;
-      }
-      
-      .search-container {
-        position: absolute;
-        top: 20px; /* Just below the navbar */
-        left: 20px; /* Left edge */
-        z-index: 1500; /* High z-index to ensure visibility */
-        width: 300px;
-      }
-      
-      .search-box {
-        width: 100%;
-        padding: 12px 16px;
-        border: 2px solid #e0e0e0;
-        border-radius: 8px;
-        background: white;
-        color: #333;
-        font-size: 14px;
-        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-        transition: all 0.3s ease;
-        box-sizing: border-box;
-      }
-      
-      .search-box:focus {
-        outline: none;
-        border-color: #667eea;
-        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15), 0 0 0 3px rgba(102, 126, 234, 0.1);
-      }
-      
-      .search-box::placeholder {
-        color: #999;
-      }
-      
-      .search-results {
-        position: absolute;
-        top: 100%;
-        left: 0;
-        right: 0;
-        background: white;
-        border: 2px solid #e0e0e0;
-        border-top: none;
-        border-radius: 0 0 8px 8px;
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-        max-height: 200px;
-        overflow-y: auto;
-        z-index: 1001;
-      }
-      
-      .search-result-item {
-        padding: 12px 16px;
-        cursor: pointer;
-        border-bottom: 1px solid #f0f0f0;
-        transition: background-color 0.2s ease;
-      }
-      
-      .search-result-item:hover {
-        background-color: #f8f9fa;
-      }
-      
-      .search-result-item:last-child {
-        border-bottom: none;
-      }
-      
-      .search-result-name {
-        font-weight: 500;
-        color: #333;
-        font-size: 14px;
-        margin-bottom: 2px;
-      }
-      
-      .search-result-address {
-        color: #666;
-        font-size: 12px;
-      }
-      
-      .search-loading {
-        padding: 12px 16px;
-        text-align: center;
-        color: #666;
-        font-size: 13px;
-      }
-      
-      .search-no-results {
-        padding: 12px 16px;
-        text-align: center;
-        color: #999;
-        font-size: 13px;
-      }
-      
-      .filter-sidebar {
-        width: 240px;
-        background: white;
-        box-shadow: 2px 0 10px rgba(0, 0, 0, 0.08);
-        padding: 20px 18px 18px 18px;
-        position: fixed;
-        top: 50%;
-        left: 30px;
-        transform: translateY(-50%);
-        transition: left 0.3s ease;
-        max-height: 85vh;
-        overflow-y: auto;
-        z-index: 1001;
-        border-radius: 0 8px 8px 0;
-        display: flex;
-        flex-direction: column;
-        gap: 18px;
-      }
-      .filter-title {
-        font-size: 17px;
-        font-weight: 600;
-        margin-bottom: 12px;
-        color: #333;
-      }
-      .filter-checkbox-group {
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
-      }
-      .filter-checkbox-label {
-        font-size: 14px;
-        color: #444;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        cursor: pointer;
-      }
-      .filter-checkbox {
-        transform: scale(1.2);
-        margin-right: 8px;
-      }
-    `
-    document.head.appendChild(style)
+    // ——————————— Removed dynamic <style> injection ———————————
 
     const map = new maplibregl.Map({
       container: mapContainerRef.current,
@@ -509,9 +80,9 @@ const ReportMap = () => {
     // Helper to update allPointsRef and map source
     const updateAllPointsSource = (userFeatures, borderFeatures, officialFeatures) => {
       const allFeatures = [
-        ...userFeatures.map(f => ({ ...f, properties: { ...f.properties, point_type: 'unofficial' } })),
-        ...borderFeatures.map(f => ({ ...f, properties: { ...f.properties, point_type: 'border' } })),
-        ...officialFeatures.map(f => ({ ...f, properties: { ...f.properties, point_type: 'official' } })),
+        ...userFeatures.map((f) => ({ ...f, properties: { ...f.properties, point_type: 'unofficial' } })),
+        ...borderFeatures.map((f) => ({ ...f, properties: { ...f.properties, point_type: 'border' } })),
+        ...officialFeatures.map((f) => ({ ...f, properties: { ...f.properties, point_type: 'official' } })),
       ]
       allPointsRef.current.features = allFeatures
       if (map.getSource('all_points')) {
@@ -534,7 +105,7 @@ const ReportMap = () => {
           details: record.details,
           using_technology: record.using_technology,
           type: 'user_report',
-          created_at: record.created_at
+          created_at: record.created_at,
         },
         geometry: {
           type: 'Point',
@@ -546,10 +117,10 @@ const ReportMap = () => {
       map.getSource('places')?.setData(geojsonRef.current)
 
       // Compute min/max date for unofficial
-      const dates = features.map(f => f.properties.date_observed).filter(Boolean)
+      const dates = features.map((f) => f.properties.date_observed).filter(Boolean)
       if (dates.length > 0) {
-        const min = dates.reduce((a, b) => a < b ? a : b)
-        const max = dates.reduce((a, b) => a > b ? a : b)
+        const min = dates.reduce((a, b) => (a < b ? a : b))
+        const max = dates.reduce((a, b) => (a > b ? a : b))
         setUnofficialDateLimits([min, max])
         setUnofficialDateRange([min, max])
       } else {
@@ -575,7 +146,7 @@ const ReportMap = () => {
           city: record.city,
           state: record.state,
           description: record.description || '',
-          type: 'border_station'
+          type: 'border_station',
         },
         geometry: {
           type: 'Point',
@@ -590,11 +161,9 @@ const ReportMap = () => {
 
     const loadOfficialCheckpoints = async () => {
       try {
-        const { data, error } = await supabase
-          .from('official_checkpoints')
-          .select('*')
+        const { data, error } = await supabase.from('official_checkpoints').select('*')
         if (error) throw error
-        const features = data.map(checkpoint => ({
+        const features = data.map((checkpoint) => ({
           type: 'Feature',
           properties: {
             id: checkpoint.id,
@@ -620,10 +189,10 @@ const ReportMap = () => {
         }
 
         // Compute min/max date for official
-        const dates = features.map(f => f.properties.date).filter(Boolean)
+        const dates = features.map((f) => f.properties.date).filter(Boolean)
         if (dates.length > 0) {
-          const min = dates.reduce((a, b) => a < b ? a : b)
-          const max = dates.reduce((a, b) => a > b ? a : b)
+          const min = dates.reduce((a, b) => (a < b ? a : b))
+          const max = dates.reduce((a, b) => (a > b ? a : b))
           setOfficialDateLimits([min, max])
           setOfficialDateRange([min, max])
         } else {
@@ -657,8 +226,8 @@ const ReportMap = () => {
           'circle-stroke-color': '#000',
         },
         layout: {
-          'visibility': 'none' // Hide since we use clustered version
-        }
+          visibility: 'none', // Hide since we use clustered version
+        },
       })
 
       // Border Stations - Keep but hide since we use clustered version
@@ -677,8 +246,8 @@ const ReportMap = () => {
           'circle-stroke-color': '#000',
         },
         layout: {
-          'visibility': 'none' // Hide since we use clustered version
-        }
+          visibility: 'none', // Hide since we use clustered version
+        },
       })
 
       // Official Checkpoints - Keep but hide since we use clustered version
@@ -697,8 +266,8 @@ const ReportMap = () => {
           'circle-stroke-color': '#000',
         },
         layout: {
-          'visibility': 'none' // Hide since we use clustered version
-        }
+          visibility: 'none', // Hide since we use clustered version
+        },
       })
 
       // Add all_points source with clustering and clusterProperties
@@ -711,17 +280,17 @@ const ReportMap = () => {
         clusterProperties: {
           unofficial_count: [
             '+',
-            ['case', ['==', ['get', 'point_type'], 'unofficial'], 1, 0]
+            ['case', ['==', ['get', 'point_type'], 'unofficial'], 1, 0],
           ],
           official_count: [
             '+',
-            ['case', ['==', ['get', 'point_type'], 'official'], 1, 0]
+            ['case', ['==', ['get', 'point_type'], 'official'], 1, 0],
           ],
           border_count: [
             '+',
-            ['case', ['==', ['get', 'point_type'], 'border'], 1, 0]
-          ]
-        }
+            ['case', ['==', ['get', 'point_type'], 'border'], 1, 0],
+          ],
+        },
       })
 
       // Cluster circles (color by dominant type)
@@ -733,19 +302,18 @@ const ReportMap = () => {
         paint: {
           'circle-color': [
             'case',
-            ['>', ['get', 'unofficial_count'], ['max', ['get', 'official_count'], ['get', 'border_count']]], '#B42222', // red
-            ['>', ['get', 'official_count'], ['max', ['get', 'unofficial_count'], ['get', 'border_count']]], '#2ecc40', // green
-            ['>', ['get', 'border_count'], ['max', ['get', 'unofficial_count'], ['get', 'official_count']]], '#0047AB', // blue
-            '#888' // fallback gray
+            ['>', ['get', 'unofficial_count'], ['max', ['get', 'official_count'], ['get', 'border_count']]],
+            '#B42222', // red
+            ['>', ['get', 'official_count'], ['max', ['get', 'unofficial_count'], ['get', 'border_count']]],
+            '#2ecc40', // green
+            ['>', ['get', 'border_count'], ['max', ['get', 'unofficial_count'], ['get', 'official_count']]],
+            '#0047AB', // blue
+            '#888', // fallback gray
           ],
-          'circle-radius': [
-            'step',
-            ['get', 'point_count'],
-            18, 10, 24, 30, 30
-          ],
+          'circle-radius': ['step', ['get', 'point_count'], 18, 10, 24, 30, 30],
           'circle-stroke-width': 2,
           'circle-stroke-color': '#fff',
-        }
+        },
       })
       // Cluster count label
       map.addLayer({
@@ -756,11 +324,11 @@ const ReportMap = () => {
         layout: {
           'text-field': '{point_count_abbreviated}',
           'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
-          'text-size': 13
+          'text-size': 13,
         },
         paint: {
-          'text-color': '#222'
-        }
+          'text-color': '#222',
+        },
       })
       // Unclustered points (color by type)
       map.addLayer({
@@ -773,14 +341,17 @@ const ReportMap = () => {
           'circle-color': [
             'match',
             ['get', 'point_type'],
-            'unofficial', '#B42222',
-            'official', '#2ecc40',
-            'border', '#0047AB',
-            '#888'
+            'unofficial',
+            '#B42222',
+            'official',
+            '#2ecc40',
+            'border',
+            '#0047AB',
+            '#888',
           ],
           'circle-stroke-width': 2,
           'circle-stroke-color': '#000',
-        }
+        },
       })
 
       // Cluster click: zoom in or show popup with breakdown
@@ -790,14 +361,14 @@ const ReportMap = () => {
         const cluster = features[0]
         const coordinates = cluster.geometry.coordinates.slice()
         const props = cluster.properties
-        
+
         // Zoom in on single click
         map.getSource('all_points').getClusterExpansionZoom(cluster.id, function (err, zoom) {
           if (err) return
-          map.easeTo({ 
-            center: coordinates, 
+          map.easeTo({
+            center: coordinates,
             zoom: zoom,
-            duration: 500
+            duration: 500,
           })
         })
       })
@@ -855,9 +426,9 @@ const ReportMap = () => {
       const { coordinates } = e.features[0].geometry
       const props = e.features[0].properties
       const pointType = props.point_type
-      
+
       let popupContent = ''
-      
+
       if (pointType === 'unofficial') {
         popupContent = `
           <div class="popup-content">
@@ -892,10 +463,7 @@ const ReportMap = () => {
         `
       }
 
-      popup = new maplibregl.Popup()
-        .setLngLat(coordinates)
-        .setHTML(popupContent)
-        .addTo(map)
+      popup = new maplibregl.Popup().setLngLat(coordinates).setHTML(popupContent).addTo(map)
     })
 
     map.on('mouseleave', 'all_points_unclustered', () => {
@@ -982,9 +550,9 @@ const ReportMap = () => {
 
       // Check if clicking on a cluster first
       const clusterFeatures = map.queryRenderedFeatures(e.point, {
-        layers: ['all_points_clusters']
+        layers: ['all_points_clusters'],
       })
-      
+
       if (clusterFeatures.length > 0) {
         // Clicked on a cluster, don't show report form (cluster handler will take care of zooming)
         return
@@ -992,13 +560,13 @@ const ReportMap = () => {
 
       // Check if clicking on a clustered point (unclustered individual points)
       const pointFeatures = map.queryRenderedFeatures(e.point, {
-        layers: ['all_points_unclustered']
+        layers: ['all_points_unclustered'],
       })
 
       if (pointFeatures.length > 0) {
         const feature = pointFeatures[0]
         const pointType = feature.properties.point_type
-        
+
         if (pointType === 'border') {
           // Clicked on a border station
           setSelectedCheckpoint({
@@ -1008,7 +576,7 @@ const ReportMap = () => {
             state: feature.properties.state,
             description: feature.properties.description,
             lat: feature.geometry.coordinates[1],
-            lng: feature.geometry.coordinates[0]
+            lng: feature.geometry.coordinates[0],
           })
         } else if (pointType === 'unofficial') {
           // Clicked on a user report
@@ -1021,7 +589,7 @@ const ReportMap = () => {
             using_technology: feature.properties.using_technology,
             lat: feature.geometry.coordinates[1],
             lng: feature.geometry.coordinates[0],
-            created_at: feature.properties.created_at
+            created_at: feature.properties.created_at,
           })
         } else if (pointType === 'official') {
           // Clicked on an official checkpoint
@@ -1037,10 +605,10 @@ const ReportMap = () => {
             lng: feature.geometry.coordinates[0],
           })
         }
-        
+
         setShowCheckpointInfo(true)
         setShowForm(false)
-        
+
         if (tempMarkerRef.current) {
           tempMarkerRef.current.remove()
           tempMarkerRef.current = null
@@ -1050,16 +618,16 @@ const ReportMap = () => {
 
       // Clicked on map (not on an existing point or cluster)
       setShowCheckpointInfo(false)
-      
+
       // Remove existing temporary marker
       if (tempMarkerRef.current) {
         tempMarkerRef.current.remove()
       }
 
       // Create new temporary marker
-      tempMarkerRef.current = new maplibregl.Marker({ 
+      tempMarkerRef.current = new maplibregl.Marker({
         color: '#ff6b6b',
-        scale: 0.8
+        scale: 0.8,
       })
         .setLngLat(e.lngLat)
         .addTo(map)
@@ -1072,7 +640,7 @@ const ReportMap = () => {
         details: '',
         using_technology: false,
         lat: e.lngLat.lat,
-        lng: e.lngLat.lng
+        lng: e.lngLat.lng,
       })
       setShowForm(true)
     })
@@ -1098,7 +666,7 @@ const ReportMap = () => {
   useEffect(() => {
     const map = mapRef.current
     if (!map) return
-    
+
     // Filter all_points based on visible layers
     let filteredUserReports = originalUserReportsRef.current
     let filteredOfficial = originalOfficialCheckpointsRef.current
@@ -1106,14 +674,14 @@ const ReportMap = () => {
 
     // Apply date filtering
     if (unofficialDateRange[0] && unofficialDateRange[1]) {
-      filteredUserReports = filteredUserReports.filter(f => {
+      filteredUserReports = filteredUserReports.filter((f) => {
         const d = f.properties.date_observed
         if (!d) return false
         return d >= unofficialDateRange[0] && d <= unofficialDateRange[1]
       })
     }
     if (officialDateRange[0] && officialDateRange[1]) {
-      filteredOfficial = filteredOfficial.filter(f => {
+      filteredOfficial = filteredOfficial.filter((f) => {
         const d = f.properties.date
         if (!d) return false
         return d >= officialDateRange[0] && d <= officialDateRange[1]
@@ -1122,11 +690,17 @@ const ReportMap = () => {
 
     // Apply layer visibility filtering
     const allFeatures = [
-      ...(visibleLayers.userReports ? filteredUserReports.map(f => ({ ...f, properties: { ...f.properties, point_type: 'unofficial' } })) : []),
-      ...(visibleLayers.borderStations ? filteredBorder.map(f => ({ ...f, properties: { ...f.properties, point_type: 'border' } })) : []),
-      ...(visibleLayers.official ? filteredOfficial.map(f => ({ ...f, properties: { ...f.properties, point_type: 'official' } })) : []),
+      ...(visibleLayers.userReports
+        ? filteredUserReports.map((f) => ({ ...f, properties: { ...f.properties, point_type: 'unofficial' } }))
+        : []),
+      ...(visibleLayers.borderStations
+        ? filteredBorder.map((f) => ({ ...f, properties: { ...f.properties, point_type: 'border' } }))
+        : []),
+      ...(visibleLayers.official
+        ? filteredOfficial.map((f) => ({ ...f, properties: { ...f.properties, point_type: 'official' } }))
+        : []),
     ]
-    
+
     allPointsRef.current.features = allFeatures
     if (map.getSource('all_points')) {
       map.getSource('all_points').setData(allPointsRef.current)
@@ -1145,7 +719,7 @@ const ReportMap = () => {
   }, [visibleLayers, unofficialDateRange, officialDateRange])
 
   const handleLayerToggle = (layer) => {
-    setVisibleLayers(prev => ({ ...prev, [layer]: !prev[layer] }))
+    setVisibleLayers((prev) => ({ ...prev, [layer]: !prev[layer] }))
   }
 
   // Search functionality
@@ -1161,14 +735,14 @@ const ReportMap = () => {
         `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&countrycodes=us`
       )
       const data = await response.json()
-      
-      const results = data.map(item => ({
+
+      const results = data.map((item) => ({
         name: item.display_name.split(',')[0],
         address: item.display_name,
         lat: parseFloat(item.lat),
-        lng: parseFloat(item.lon)
+        lng: parseFloat(item.lon),
       }))
-      
+
       setSearchResults(results)
       setShowSearchResults(true)
     } catch (error) {
@@ -1181,7 +755,7 @@ const ReportMap = () => {
   const handleSearchChange = (e) => {
     const query = e.target.value
     setSearchQuery(query)
-    
+
     // Debounce search requests
     clearTimeout(window.searchTimeout)
     window.searchTimeout = setTimeout(() => {
@@ -1196,7 +770,7 @@ const ReportMap = () => {
       map.flyTo({
         center: [result.lng, result.lat],
         zoom: 14,
-        duration: 2000
+        duration: 2000,
       })
       // Remove previous search marker if exists
       if (searchMarkerRef.current) {
@@ -1205,7 +779,7 @@ const ReportMap = () => {
       // Add a new marker for the searched address
       searchMarkerRef.current = new maplibregl.Marker({
         color: '#a259f7', // purple
-        scale: 0.8
+        scale: 0.8,
       })
         .setLngLat([result.lng, result.lat])
         .addTo(map)
@@ -1222,9 +796,9 @@ const ReportMap = () => {
   }
 
   const handleFormChange = (field, value) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      [field]: value
+      [field]: value,
     }))
   }
 
@@ -1234,16 +808,18 @@ const ReportMap = () => {
       if (checkpointType === 'official') {
         const { data, error } = await supabase
           .from('official_checkpoints')
-          .insert([{
-            location: formData.location,
-            date: formData.date,
-            verification: formData.verification,
-            description: formData.description,
-            agency: formData.agency,
-            using_technology: formData.using_technology,
-            latitude: formData.lat,
-            longitude: formData.lng
-          }])
+          .insert([
+            {
+              location: formData.location,
+              date: formData.date,
+              verification: formData.verification,
+              description: formData.description,
+              agency: formData.agency,
+              using_technology: formData.using_technology,
+              latitude: formData.lat,
+              longitude: formData.lng,
+            },
+          ])
           .select()
         if (error) throw error
         alert('Official checkpoint submitted!')
@@ -1251,15 +827,17 @@ const ReportMap = () => {
       } else {
         const { data, error } = await supabase
           .from('checkpoint_reports')
-          .insert([{
-            checkpoint_type: formData.checkpoint_type,
-            agency: formData.agency,
-            date_observed: formData.date_observed,
-            details: formData.details,
-            using_technology: formData.using_technology,
-            lat: formData.lat,
-            lng: formData.lng
-          }])
+          .insert([
+            {
+              checkpoint_type: formData.checkpoint_type,
+              agency: formData.agency,
+              date_observed: formData.date_observed,
+              details: formData.details,
+              using_technology: formData.using_technology,
+              lat: formData.lat,
+              lng: formData.lng,
+            },
+          ])
           .select()
         if (error) throw error
         alert('Unofficial checkpoint submitted!')
@@ -1318,9 +896,11 @@ const ReportMap = () => {
           </label>
         </div>
         {/* Unofficial Date Slider */}
-        <div className="form-group" style={{marginTop: '18px'}}>
+        <div className="form-group" style={{ marginTop: '18px' }}>
           <label className="form-label">Unofficial Date Range</label>
-          {unofficialDateLimits[0] && unofficialDateLimits[1] && unofficialDateLimits[0] !== unofficialDateLimits[1] ? (
+          {unofficialDateLimits[0] &&
+          unofficialDateLimits[1] &&
+          unofficialDateLimits[0] !== unofficialDateLimits[1] ? (
             <>
               <input
                 type="date"
@@ -1328,8 +908,8 @@ const ReportMap = () => {
                 min={unofficialDateLimits[0]}
                 max={unofficialDateLimits[1]}
                 value={unofficialDateRange[0]}
-                onChange={e => setUnofficialDateRange([e.target.value, unofficialDateRange[1]])}
-                style={{marginBottom: 6}}
+                onChange={(e) => setUnofficialDateRange([e.target.value, unofficialDateRange[1]])}
+                style={{ marginBottom: 6 }}
               />
               <input
                 type="date"
@@ -1337,27 +917,24 @@ const ReportMap = () => {
                 min={unofficialDateLimits[0]}
                 max={unofficialDateLimits[1]}
                 value={unofficialDateRange[1]}
-                onChange={e => setUnofficialDateRange([unofficialDateRange[0], e.target.value])}
+                onChange={(e) => setUnofficialDateRange([unofficialDateRange[0], e.target.value])}
               />
-              <div style={{fontSize: 12, color: '#888', marginTop: 2}}>
+              <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>
                 {formatDate(unofficialDateRange[0])} to {formatDate(unofficialDateRange[1])}
               </div>
             </>
           ) : unofficialDateLimits[0] && unofficialDateLimits[1] ? (
-            <input
-              type="date"
-              className="form-input"
-              value={unofficialDateLimits[0]}
-              disabled
-            />
+            <input type="date" className="form-input" value={unofficialDateLimits[0]} disabled />
           ) : (
-            <div style={{fontSize: 12, color: '#888'}}>No unofficial checkpoint dates</div>
+            <div style={{ fontSize: 12, color: '#888' }}>No unofficial checkpoint dates</div>
           )}
         </div>
         {/* Official Date Slider */}
         <div className="form-group">
           <label className="form-label">Official Date Range</label>
-          {officialDateLimits[0] && officialDateLimits[1] && officialDateLimits[0] !== officialDateLimits[1] ? (
+          {officialDateLimits[0] &&
+          officialDateLimits[1] &&
+          officialDateLimits[0] !== officialDateLimits[1] ? (
             <>
               <input
                 type="date"
@@ -1365,8 +942,8 @@ const ReportMap = () => {
                 min={officialDateLimits[0]}
                 max={officialDateLimits[1]}
                 value={officialDateRange[0]}
-                onChange={e => setOfficialDateRange([e.target.value, officialDateRange[1]])}
-                style={{marginBottom: 6}}
+                onChange={(e) => setOfficialDateRange([e.target.value, officialDateRange[1]])}
+                style={{ marginBottom: 6 }}
               />
               <input
                 type="date"
@@ -1374,21 +951,16 @@ const ReportMap = () => {
                 min={officialDateLimits[0]}
                 max={officialDateLimits[1]}
                 value={officialDateRange[1]}
-                onChange={e => setOfficialDateRange([officialDateRange[0], e.target.value])}
+                onChange={(e) => setOfficialDateRange([officialDateRange[0], e.target.value])}
               />
-              <div style={{fontSize: 12, color: '#888', marginTop: 2}}>
+              <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>
                 {formatDate(officialDateRange[0])} to {formatDate(officialDateRange[1])}
               </div>
             </>
           ) : officialDateLimits[0] && officialDateLimits[1] ? (
-            <input
-              type="date"
-              className="form-input"
-              value={officialDateLimits[0]}
-              disabled
-            />
+            <input type="date" className="form-input" value={officialDateLimits[0]} disabled />
           ) : (
-            <div style={{fontSize: 12, color: '#888'}}>No official checkpoint dates</div>
+            <div style={{ fontSize: 12, color: '#888' }}>No official checkpoint dates</div>
           )}
         </div>
       </div>
@@ -1423,14 +995,14 @@ const ReportMap = () => {
           )}
         </div>
         <div ref={mapContainerRef} style={{ height: '100%', width: '100%' }} />
-        
+
         {!showForm && !showCheckpointInfo && (
           <div className="click-instruction">
             <span className="click-instruction-icon">🗺️</span>Click anywhere on the map to report a checkpoint, or click on a dot to view more information.
           </div>
         )}
       </div>
-      
+
       <div className={`form-sidebar ${showForm ? 'visible' : ''}`}>
         <button className="close-button" onClick={handleCloseForm}>×</button>
         <h2 className="form-title">Report an {checkpointType === 'official' ? 'Official' : 'Unofficial'} Checkpoint</h2>
@@ -1442,10 +1014,10 @@ const ReportMap = () => {
         <form onSubmit={handleSubmit}>
           <div className="form-group">
             <label className="form-label">Type of Report *</label>
-            <select 
+            <select
               className="form-select"
               value={checkpointType}
-              onChange={e => setCheckpointType(e.target.value)}
+              onChange={(e) => setCheckpointType(e.target.value)}
               required
             >
               <option value="unofficial">Unofficial</option>
@@ -1457,7 +1029,7 @@ const ReportMap = () => {
               <div className="form-row">
                 <div className="form-group">
                   <label className="form-label">Type of Checkpoint *</label>
-                  <select 
+                  <select
                     className="form-select"
                     value={formData.checkpoint_type}
                     onChange={(e) => handleFormChange('checkpoint_type', e.target.value)}
@@ -1474,7 +1046,7 @@ const ReportMap = () => {
                 </div>
                 <div className="form-group">
                   <label className="form-label">Agency or Type *</label>
-                  <select 
+                  <select
                     className="form-select"
                     value={formData.agency}
                     onChange={(e) => handleFormChange('agency', e.target.value)}
@@ -1493,8 +1065,8 @@ const ReportMap = () => {
               </div>
               <div className="form-group">
                 <label className="form-label">Date Observed *</label>
-                <input 
-                  type="date" 
+                <input
+                  type="date"
                   className="form-input"
                   value={formData.date_observed}
                   onChange={(e) => handleFormChange('date_observed', e.target.value)}
@@ -1503,17 +1075,17 @@ const ReportMap = () => {
               </div>
               <div className="form-group">
                 <label className="form-label">Details</label>
-                <textarea 
-                  className="form-textarea" 
+                <textarea
+                  className="form-textarea"
                   placeholder="Stopping every car, questions asked, documents requested, etc."
                   value={formData.details}
                   onChange={(e) => handleFormChange('details', e.target.value)}
                 />
               </div>
               <div className="form-checkbox-group">
-                <input 
-                  type="checkbox" 
-                  id="using_technology" 
+                <input
+                  type="checkbox"
+                  id="using_technology"
                   className="form-checkbox"
                   checked={formData.using_technology}
                   onChange={(e) => handleFormChange('using_technology', e.target.checked)}
@@ -1532,14 +1104,14 @@ const ReportMap = () => {
                   className="form-input"
                   type="text"
                   value={formData.location}
-                  onChange={e => handleFormChange('location', e.target.value)}
+                  onChange={(e) => handleFormChange('location', e.target.value)}
                   required={checkpointType === 'official'}
                 />
               </div>
               <div className="form-group">
                 <label className="form-label">Date *</label>
-                <input 
-                  type="date" 
+                <input
+                  type="date"
                   className="form-input"
                   value={formData.date}
                   onChange={(e) => handleFormChange('date', e.target.value)}
@@ -1551,7 +1123,7 @@ const ReportMap = () => {
                 <select
                   className="form-select"
                   value={formData.verification}
-                  onChange={e => handleFormChange('verification', e.target.value)}
+                  onChange={(e) => handleFormChange('verification', e.target.value)}
                   required={checkpointType === 'official'}
                 >
                   <option value="">Select verification...</option>
@@ -1564,12 +1136,12 @@ const ReportMap = () => {
                 <textarea
                   className="form-textarea"
                   value={formData.description}
-                  onChange={e => handleFormChange('description', e.target.value)}
+                  onChange={(e) => handleFormChange('description', e.target.value)}
                 />
               </div>
               <div className="form-group">
                 <label className="form-label">Agency *</label>
-                <select 
+                <select
                   className="form-select"
                   value={formData.agency}
                   onChange={(e) => handleFormChange('agency', e.target.value)}
@@ -1586,9 +1158,9 @@ const ReportMap = () => {
                 </select>
               </div>
               <div className="form-checkbox-group">
-                <input 
-                  type="checkbox" 
-                  id="using_technology" 
+                <input
+                  type="checkbox"
+                  id="using_technology"
                   className="form-checkbox"
                   checked={formData.using_technology}
                   onChange={(e) => handleFormChange('using_technology', e.target.checked)}
@@ -1599,12 +1171,14 @@ const ReportMap = () => {
               </div>
             </>
           )}
-          <button 
-            type="submit" 
+          <button
+            type="submit"
             className="btn-submit"
             disabled={
-              (checkpointType === 'unofficial' && (!formData.checkpoint_type || !formData.agency || !formData.date_observed)) ||
-              (checkpointType === 'official' && (!formData.location || !formData.date || !formData.verification || !formData.agency))
+              (checkpointType === 'unofficial' &&
+                (!formData.checkpoint_type || !formData.agency || !formData.date_observed)) ||
+              (checkpointType === 'official' &&
+                (!formData.location || !formData.date || !formData.verification || !formData.agency))
             }
           >
             Submit Report
@@ -1614,69 +1188,74 @@ const ReportMap = () => {
 
       <div className={`info-sidebar ${showCheckpointInfo ? 'visible' : ''}`}>
         <button className="close-button" onClick={handleCloseInfo}>×</button>
-        
+
         {selectedCheckpoint?.type === 'border_station' && (
           <>
             <h2 className="info-title border-station">{selectedCheckpoint.name}</h2>
-            
+
             <div className="coordinates-display">
               <strong>Location:</strong>
               Lat: {selectedCheckpoint.lat.toFixed(6)}<br />
               Lng: {selectedCheckpoint.lng.toFixed(6)}
             </div>
-            
+
             <div className="info-field">
               <div className="info-field-label">City/State:</div>
-              <div className="info-field-value">{selectedCheckpoint.city}, {selectedCheckpoint.state}</div>
+              <div className="info-field-value">
+                {selectedCheckpoint.city}, {selectedCheckpoint.state}
+              </div>
             </div>
-            
+
             {selectedCheckpoint.description && (
               <div className="info-field">
                 <div className="info-field-label">Description:</div>
                 <div className="info-field-value">{selectedCheckpoint.description}</div>
               </div>
             )}
-            
+
             <div className="info-field">
-              <div className="info-field-value" style={{ color: '#0047AB', fontStyle: 'italic', marginTop: '10px' }}>
+              <div
+                className="info-field-value"
+                style={{ color: '#0047AB', fontStyle: 'italic', marginTop: '10px' }}
+              >
                 Border Patrol Station
               </div>
             </div>
           </>
         )}
-        
+
         {selectedCheckpoint?.type === 'user_report' && (
           <>
             <h2 className="info-title user-report">User Reported Checkpoint</h2>
-            
+
             <div className="coordinates-display">
               <strong>Location:</strong>
               Lat: {selectedCheckpoint.lat.toFixed(6)}<br />
               Lng: {selectedCheckpoint.lng.toFixed(6)}
             </div>
-            
+
             <div className="info-field">
               <div className="info-field-label">Type:</div>
               <div className="info-field-value">{selectedCheckpoint.checkpoint_type}</div>
             </div>
-            
+
             <div className="info-field">
               <div className="info-field-label">Agency:</div>
               <div className="info-field-value">{selectedCheckpoint.agency}</div>
             </div>
-            
+
             <div className="info-field">
               <div className="info-field-label">Date Observed:</div>
               <div className="info-field-value">{selectedCheckpoint.date_observed}</div>
             </div>
-            
+
             {selectedCheckpoint.details && (
               <div className="info-field">
                 <div className="info-field-label">Details:</div>
                 <div className="info-field-value">{selectedCheckpoint.details}</div>
               </div>
             )}
-            
+
             {selectedCheckpoint.using_technology && (
               <div className="info-field">
                 <div className="info-field-label">Technology Used:</div>
@@ -1685,7 +1264,7 @@ const ReportMap = () => {
             )}
           </>
         )}
-        
+
         {selectedCheckpoint?.type === 'official' && (
           <>
             <h2 className="info-title" style={{ color: '#2ecc40' }}>Official Checkpoint</h2>

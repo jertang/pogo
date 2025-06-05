@@ -14,8 +14,6 @@ export function NavBar() {
             </div>
             <ul className="navbar-links">
                 <Link to='/' ><li>Overview</li></Link>
-                <Link to='/dashboard' ><li>Dashboard</li></Link>
-                <Link to='/methodology' ><li>Methodology</li></Link>
                 <Link to='/about' ><li>About the Project</li></Link>
                 <Link to='/contact' ><li>Contact Us</li></Link>
             </ul>
