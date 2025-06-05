@@ -37,7 +37,6 @@ const OverviewMap = () => {
   })
 
   useEffect(() => {
-    // --- Removed dynamic <style> injection entirely ---
 
     const map = new maplibregl.Map({
       container: mapContainerRef.current,
