@@ -6,10 +6,8 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 
 import { Report } from '../pages/Report';
 import { Home } from '../pages/Home';
-import { Dashboard } from '../pages/Dashboard';
 import { About } from '../pages/About';
 import { Contact } from '../pages/Contact';
-import { Methodology } from '../pages/Methodology';
 import { NavBar } from './NavBar';
 
 function App(props) {
@@ -20,8 +18,6 @@ function App(props) {
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/about" element={<About />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/methodology" element={<Methodology />} />
           <Route path="/contact" element={<Contact />} />
           <Route path="/report" element={<Report />} />
         </Routes> 
