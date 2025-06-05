@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import maplibregl from 'maplibre-gl'
 import { createClient } from '@supabase/supabase-js'
 import 'maplibre-gl/dist/maplibre-gl.css'
-import './OverviewMap.css'         
+import './OverviewMap.css'
 
 // Supabase setup
 const supabaseUrl = 'https://yybdwyflzpzgdqanrbpa.supabase.co'
@@ -13,15 +13,26 @@ const supabase = createClient(supabaseUrl, supabaseKey)
 const OverviewMap = () => {
   const mapContainerRef = useRef(null)
   const mapRef = useRef(null)
+
+  // -------------------------------------------------------------------
+  // 1. Add state to track which layers are visible
+  // -------------------------------------------------------------------
+  const [visibleLayers, setVisibleLayers] = useState({
+    userReports: true,
+    official: true,
+    borderStations: true,
+  })
+
+  // Other state for when clicking a state, etc.
   const [selectedState, setSelectedState] = useState(null)
   const [showStateInfo, setShowStateInfo] = useState(false)
   const [stateData, setStateData] = useState(null)
   const [stateCounts, setStateCounts] = useState({
     userReports: 0,
     borderStations: 0,
-    officialCheckpoints: 0
+    officialCheckpoints: 0,
   })
-  
+
   // Refs for checkpoint data
   const userReportsRef = useRef({
     type: 'FeatureCollection',
@@ -37,7 +48,6 @@ const OverviewMap = () => {
   })
 
   useEffect(() => {
-
     const map = new maplibregl.Map({
       container: mapContainerRef.current,
       style: {
@@ -48,37 +58,34 @@ const OverviewMap = () => {
             id: 'background',
             type: 'background',
             paint: {
-              'background-color': '#2d3748' // Dark gray background for better contrast
-            }
-          }
-        ]
+              'background-color': '#2d3748', // Dark gray background
+            },
+          },
+        ],
       },
       center: [-98.5795, 36.8283],
       zoom: 3.5,
       minZoom: 3,
-      maxZoom: 10
+      maxZoom: 10,
     })
 
-    console.log('Map initialized:', map)
     mapRef.current = map
 
-    // Load US States GeoJSON
+    // -------------------------------------------------------------------
+    // 2. Load US States GeoJSON (same as before)
+    // -------------------------------------------------------------------
     const loadUSStates = async () => {
       try {
-        console.log('Loading US states...')
-        // Filter for US states only - this is a simplified approach
-        // For a production app, you'd want to use a proper US states GeoJSON
-        const usResponse = await fetch('https://raw.githubusercontent.com/PublicaMundi/MappingAPI/master/data/geojson/us-states.json')
+        const usResponse = await fetch(
+          'https://raw.githubusercontent.com/PublicaMundi/MappingAPI/master/data/geojson/us-states.json'
+        )
         const usStatesData = await usResponse.json()
-        
-        console.log('US states data loaded:', usStatesData)
-        
+
         map.addSource('us-states', {
           type: 'geojson',
-          data: usStatesData
+          data: usStatesData,
         })
 
-        // Add state fill layer
         map.addLayer({
           id: 'state-fills',
           type: 'fill',
@@ -87,33 +94,32 @@ const OverviewMap = () => {
             'fill-color': [
               'case',
               ['boolean', ['feature-state', 'hover'], false],
-              '#4299e1', // Brighter blue for hover on dark background
-              '#718096' // Medium gray fill for states on dark background
+              '#4299e1',
+              '#718096',
             ],
             'fill-opacity': [
               'case',
               ['boolean', ['feature-state', 'hover'], false],
               0.8,
-              0.4 // Lower opacity so markers show through better
-            ]
-          }
+              0.4,
+            ],
+          },
         })
 
-        // Add state border layer
         map.addLayer({
           id: 'state-borders',
           type: 'line',
           source: 'us-states',
           paint: {
-            'line-color': '#e2e8f0', // Light gray borders for contrast on dark background
-            'line-width': 1, // Thinner borders to be less prominent
-            'line-opacity': 0.8
-          }
+            'line-color': '#e2e8f0',
+            'line-width': 1,
+            'line-opacity': 0.8,
+          },
         })
 
-        console.log('State layers added successfully')
-
-        // Add checkpoint layers AFTER state layers so they render on top
+        // -------------------------------------------------------------------
+        // 3. Add checkpoint layers ON TOP of states (same styling as before)
+        // -------------------------------------------------------------------
         map.addLayer({
           id: 'user-reports-layer',
           type: 'circle',
@@ -123,41 +129,40 @@ const OverviewMap = () => {
             'circle-color': '#dc2626',
             'circle-stroke-width': 2,
             'circle-stroke-color': '#ffffff',
-            'circle-opacity': 0.9
-          }
+            'circle-opacity': 0.9,
+          },
         })
 
         map.addLayer({
-          id: 'official-checkpoints-layer', 
+          id: 'official-checkpoints-layer',
           type: 'circle',
           source: 'official-checkpoints',
           paint: {
             'circle-radius': 6,
-            'circle-color': '#059669', 
+            'circle-color': '#059669',
             'circle-stroke-width': 2,
             'circle-stroke-color': '#ffffff',
-            'circle-opacity': 0.9
-          }
+            'circle-opacity': 0.9,
+          },
         })
 
         map.addLayer({
           id: 'border-stations-layer',
-          type: 'circle', 
+          type: 'circle',
           source: 'border-stations',
           paint: {
             'circle-radius': 6,
             'circle-color': '#2563eb',
             'circle-stroke-width': 2,
-            'circle-stroke-color': '#ffffff', 
-            'circle-opacity': 0.9
-          }
+            'circle-stroke-color': '#ffffff',
+            'circle-opacity': 0.9,
+          },
         })
 
-        console.log('Checkpoint layers added on top of state layers')
-
-        // Add state hover effects
+        // -------------------------------------------------------------------
+        // 4. State hover & click handlers (unchanged)
+        // -------------------------------------------------------------------
         let hoveredStateId = null
-
         map.on('mousemove', 'state-fills', (e) => {
           if (e.features.length > 0) {
             if (hoveredStateId !== null) {
@@ -171,7 +176,6 @@ const OverviewMap = () => {
               { source: 'us-states', id: hoveredStateId },
               { hover: true }
             )
-            
             map.getCanvas().style.cursor = 'pointer'
           }
         })
@@ -187,67 +191,50 @@ const OverviewMap = () => {
           map.getCanvas().style.cursor = ''
         })
 
-        // Handle state clicks
         map.on('click', 'state-fills', async (e) => {
-          console.log('State clicked - full feature:', e.features[0])
-          console.log('Available properties:', Object.keys(e.features[0].properties))
-          if (e.features.length > 0) {
-            // Try different possible property names for state name
-            const properties = e.features[0].properties
-            const stateName = properties.NAME || properties.name || properties.STATE_NAME || properties.STUSPS || properties.STATE
-            const stateFeature = e.features[0] // Pass the full feature for bounds calculation
-            
-            console.log('State name resolved to:', stateName)
-            
-            if (!stateName) {
-              console.error('Could not determine state name from properties:', properties)
-              return
-            }
-            
-            // Fit map to state bounds
-            const bounds = new maplibregl.LngLatBounds()
-            
-            if (e.features[0].geometry.type === 'Polygon') {
-              e.features[0].geometry.coordinates[0].forEach(coord => {
-                bounds.extend(coord)
-              })
-            } else if (e.features[0].geometry.type === 'MultiPolygon') {
-              e.features[0].geometry.coordinates.forEach(polygon => {
-                polygon[0].forEach(coord => {
-                  bounds.extend(coord)
-                })
-              })
-            }
-            
-            map.fitBounds(bounds, {
-              padding: {
-                top: 150,
-                bottom: 150,
-                left: 150,
-                right: 500 // Even more padding to zoom out further
-              },
-              duration: 1000,
-              maxZoom: 6 // Limit maximum zoom level
-            })
+          if (!e.features.length) return
+          const props = e.features[0].properties
+          const stateName =
+            props.NAME || props.name || props.STATE_NAME || props.STUSPS || props.STATE
+          const stateFeature = e.features[0]
 
-            // Load state info with the state feature for bounds calculation
-            await loadStateInfo(stateName, stateFeature)
+          if (!stateName) {
+            console.error('Could not determine state name:', props)
+            return
           }
-        })
 
+          // Fit to bounds (same as before)
+          const bounds = new maplibregl.LngLatBounds()
+          if (stateFeature.geometry.type === 'Polygon') {
+            stateFeature.geometry.coordinates[0].forEach((coord) => {
+              bounds.extend(coord)
+            })
+          } else if (stateFeature.geometry.type === 'MultiPolygon') {
+            stateFeature.geometry.coordinates.forEach((poly) =>
+              poly[0].forEach((coord) => bounds.extend(coord))
+            )
+          }
+
+          map.fitBounds(bounds, {
+            padding: { top: 150, bottom: 150, left: 150, right: 500 },
+            duration: 1000,
+            maxZoom: 6,
+          })
+
+          await loadStateInfo(stateName, stateFeature)
+        })
       } catch (error) {
         console.error('Error loading US states:', error)
       }
     }
 
-    // Load checkpoint data
+    // -------------------------------------------------------------------
+    // 5. Load checkpoint data (same as before, populating userReportsRef, etc.)
+    // -------------------------------------------------------------------
     const loadCheckpointReports = async () => {
       try {
-        console.log('Loading checkpoint reports...')
         const { data, error } = await supabase.from('checkpoint_reports').select('*')
         if (error) throw error
-
-        console.log('Checkpoint reports loaded:', data.length, 'records')
 
         const features = data.map((record) => ({
           type: 'Feature',
@@ -268,7 +255,6 @@ const OverviewMap = () => {
         userReportsRef.current.features = features
         if (map.getSource('user-reports')) {
           map.getSource('user-reports').setData(userReportsRef.current)
-          console.log('User reports data updated on map')
         }
       } catch (error) {
         console.error('Error loading checkpoint reports:', error)
@@ -277,11 +263,8 @@ const OverviewMap = () => {
 
     const loadBorderStations = async () => {
       try {
-        console.log('Loading border stations...')
         const { data, error } = await supabase.from('border_stations').select('*')
         if (error) throw error
-
-        console.log('Border stations loaded:', data.length, 'records')
 
         const features = data.map((record) => ({
           type: 'Feature',
@@ -302,7 +285,6 @@ const OverviewMap = () => {
         borderStationsRef.current.features = features
         if (map.getSource('border-stations')) {
           map.getSource('border-stations').setData(borderStationsRef.current)
-          console.log('Border stations data updated on map')
         }
       } catch (error) {
         console.error('Error loading border stations:', error)
@@ -311,11 +293,8 @@ const OverviewMap = () => {
 
     const loadOfficialCheckpoints = async () => {
       try {
-        console.log('Loading official checkpoints...')
         const { data, error } = await supabase.from('official_checkpoints').select('*')
         if (error) throw error
-
-        console.log('Official checkpoints loaded:', data.length, 'records')
 
         const features = data.map((checkpoint) => ({
           type: 'Feature',
@@ -338,7 +317,6 @@ const OverviewMap = () => {
         officialCheckpointsRef.current.features = features
         if (map.getSource('official-checkpoints')) {
           map.getSource('official-checkpoints').setData(officialCheckpointsRef.current)
-          console.log('Official checkpoints data updated on map')
         }
       } catch (error) {
         console.error('Error loading official checkpoints:', error)
@@ -347,36 +325,34 @@ const OverviewMap = () => {
 
     const loadStateInfo = async (stateName, stateFeature) => {
       try {
-        console.log('Loading state info for:', stateName)
         const { data, error } = await supabase
           .from('states')
           .select('*')
           .eq('state_name', stateName)
           .single()
-        
         if (error) {
           console.error('Error loading state info:', error)
           return
         }
 
-        console.log('State info loaded:', data)
-        
-        // Calculate checkpoint counts for this state
+        // Same counting logic as before
         const calculateStateCounts = (stateName, stateFeature) => {
-          // Convert state name to match database format
           const stateNameUpper = stateName.toUpperCase()
           const stateNameLower = stateName.toLowerCase()
-          const stateNameTitle = stateName.charAt(0).toUpperCase() + stateName.slice(1).toLowerCase()
-          
-          // Get rough bounds of the state for user reports filtering
+          const stateNameTitle =
+            stateName.charAt(0).toUpperCase() + stateName.slice(1).toLowerCase()
+
           let stateBounds = null
-          if (stateFeature && stateFeature.geometry) {
-            const coords = stateFeature.geometry.type === 'Polygon' 
-              ? stateFeature.geometry.coordinates[0]
-              : stateFeature.geometry.coordinates[0][0]
-            
-            let minLng = Infinity, maxLng = -Infinity, minLat = Infinity, maxLat = -Infinity
-            coords.forEach(coord => {
+          if (stateFeature.geometry) {
+            const coords =
+              stateFeature.geometry.type === 'Polygon'
+                ? stateFeature.geometry.coordinates[0]
+                : stateFeature.geometry.coordinates[0][0]
+            let minLng = Infinity,
+              maxLng = -Infinity,
+              minLat = Infinity,
+              maxLat = -Infinity
+            coords.forEach((coord) => {
               minLng = Math.min(minLng, coord[0])
               maxLng = Math.max(maxLng, coord[0])
               minLat = Math.min(minLat, coord[1])
@@ -384,43 +360,50 @@ const OverviewMap = () => {
             })
             stateBounds = { minLng, maxLng, minLat, maxLat }
           }
-          
-          // Count user reports (rough approximation using bounds)
-          const userReports = stateBounds ? userReportsRef.current.features.filter(feature => {
-            const [lng, lat] = feature.geometry.coordinates
-            return lng >= stateBounds.minLng && lng <= stateBounds.maxLng &&
-                   lat >= stateBounds.minLat && lat <= stateBounds.maxLat
-          }).length : 0
-          
-          // Count border stations  
-          const borderStations = borderStationsRef.current.features.filter(feature => {
+
+          const userReports = stateBounds
+            ? userReportsRef.current.features.filter((feature) => {
+                const [lng, lat] = feature.geometry.coordinates
+                return (
+                  lng >= stateBounds.minLng &&
+                  lng <= stateBounds.maxLng &&
+                  lat >= stateBounds.minLat &&
+                  lat <= stateBounds.maxLat
+                )
+              }).length
+            : 0
+
+          const borderStations = borderStationsRef.current.features.filter((feature) => {
             const state = feature.properties.state
-            return state && (
-              state.toUpperCase() === stateNameUpper ||
-              state.toLowerCase() === stateNameLower ||
-              state === stateNameTitle ||
-              state === stateName
+            return (
+              state &&
+              (state.toUpperCase() === stateNameUpper ||
+                state.toLowerCase() === stateNameLower ||
+                state === stateNameTitle ||
+                state === stateName)
             )
           }).length
-          
-          // Count official checkpoints (improved location matching)
-          const officialCheckpoints = officialCheckpointsRef.current.features.filter(feature => {
-            const location = feature.properties.location || ''
-            return location.toLowerCase().includes(stateNameLower) ||
-                   location.toUpperCase().includes(stateNameUpper) ||
-                   location.includes(stateName)
-          }).length
-          
+
+          const officialCheckpoints = officialCheckpointsRef.current.features.filter(
+            (feature) => {
+              const location = feature.properties.location || ''
+              return (
+                location.toLowerCase().includes(stateNameLower) ||
+                location.toUpperCase().includes(stateNameUpper) ||
+                location.includes(stateName)
+              )
+            }
+          ).length
+
           return {
             userReports,
-            borderStations, 
-            officialCheckpoints
+            borderStations,
+            officialCheckpoints,
           }
         }
-        
+
         const counts = calculateStateCounts(stateName, stateFeature)
         setStateCounts(counts)
-        
         setStateData(data)
         setSelectedState(stateName)
         setShowStateInfo(true)
@@ -429,29 +412,27 @@ const OverviewMap = () => {
       }
     }
 
+    // -------------------------------------------------------------------
+    // 6. On map.load, add sources & layers and load initial data
+    // -------------------------------------------------------------------
     map.on('load', () => {
-      console.log('Map load event fired')
       map.resize()
 
       // Add checkpoint sources first
       map.addSource('user-reports', {
         type: 'geojson',
-        data: userReportsRef.current
+        data: userReportsRef.current,
       })
-
       map.addSource('border-stations', {
         type: 'geojson',
-        data: borderStationsRef.current
+        data: borderStationsRef.current,
       })
-
       map.addSource('official-checkpoints', {
         type: 'geojson',
-        data: officialCheckpointsRef.current
+        data: officialCheckpointsRef.current,
       })
 
-      console.log('Checkpoint sources added')
-
-      // Load US states and add layers (this will now add checkpoint layers on top)
+      // Now load US states (which also re-adds the three layers on top)
       loadUSStates()
 
       // Load all checkpoint data
@@ -461,35 +442,68 @@ const OverviewMap = () => {
     })
 
     return () => {
-      map.remove()
+      if (map) map.remove()
     }
   }, [])
+
+  // -------------------------------------------------------------------
+  // 7. Whenever visibleLayers changes, update layer visibility
+  // -------------------------------------------------------------------
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+
+    // If a layer doesn’t exist yet, skip it gracefully
+    try {
+      map.setLayoutProperty(
+        'user-reports-layer',
+        'visibility',
+        visibleLayers.userReports ? 'visible' : 'none'
+      )
+      map.setLayoutProperty(
+        'official-checkpoints-layer',
+        'visibility',
+        visibleLayers.official ? 'visible' : 'none'
+      )
+      map.setLayoutProperty(
+        'border-stations-layer',
+        'visibility',
+        visibleLayers.borderStations ? 'visible' : 'none'
+      )
+    } catch (e) {
+      // Layers might not be ready, ignore errors
+    }
+  }, [visibleLayers])
+
+  const handleLayerToggle = (layerKey) => {
+    setVisibleLayers((prev) => ({
+      ...prev,
+      [layerKey]: !prev[layerKey],
+    }))
+  }
 
   const handleCloseStateInfo = () => {
     setShowStateInfo(false)
     setSelectedState(null)
     setStateData(null)
-    
-    // Reset map to full US view
+
     if (mapRef.current) {
       mapRef.current.flyTo({
         center: [-98.5795, 39.8283],
         zoom: 3.5,
-        duration: 1000
+        duration: 1000,
       })
     }
   }
 
-  // Add escape key listener
+  // Add escape key listener for state info panel
   useEffect(() => {
     const handleKeyDown = (event) => {
       if (event.key === 'Escape') {
         handleCloseStateInfo()
       }
     }
-
     document.addEventListener('keydown', handleKeyDown)
-    
     return () => {
       document.removeEventListener('keydown', handleKeyDown)
     }
@@ -498,13 +512,46 @@ const OverviewMap = () => {
   return (
     <div className="overview-container">
       <div ref={mapContainerRef} className="overview-map" />
-      
+
+      {/* ------------------------------------------------------------------- */}
+      {/* 8. Sidebar (or panel) for filtering checkbox UI */}
+      {/* ------------------------------------------------------------------- */}
+      <div className="filter-sidebar">
+        <div className="filter-title">Show on Map</div>
+        <div className="filter-checkbox-group">
+          <label className="filter-checkbox-label">
+            <input
+              type="checkbox"
+              checked={visibleLayers.userReports}
+              onChange={() => handleLayerToggle('userReports')}
+            />
+            User Reported Checkpoints
+          </label>
+          <label className="filter-checkbox-label">
+            <input
+              type="checkbox"
+              checked={visibleLayers.official}
+              onChange={() => handleLayerToggle('official')}
+            />
+            Official Checkpoints
+          </label>
+          <label className="filter-checkbox-label">
+            <input
+              type="checkbox"
+              checked={visibleLayers.borderStations}
+              onChange={() => handleLayerToggle('borderStations')}
+            />
+            Border Stations
+          </label>
+        </div>
+      </div>
+
       <div className="instruction">
         <p className="instruction-text">
-          Click on any state to view detailed checkpoint legislation and zoom in
+          Click on any state to view detailed checkpoint information and zoom in
         </p>
       </div>
-      
+
       <div className="legend">
         <div className="legend-title">Checkpoint Types</div>
         <div className="legend-item">
@@ -521,6 +568,9 @@ const OverviewMap = () => {
         </div>
       </div>
 
+      {/* ------------------------------------------------------------------- */}
+      {/* 9. State Info Panel (unchanged) */}
+      {/* ------------------------------------------------------------------- */}
       <div className={`state-info-panel ${showStateInfo ? 'visible' : ''}`}>
         {stateData && (
           <>
@@ -530,7 +580,7 @@ const OverviewMap = () => {
                 ×
               </button>
             </div>
-            
+
             <div className="state-info-content">
               <div className="info-section">
                 <h2 className="section-title">Checkpoint Summary</h2>
@@ -543,17 +593,22 @@ const OverviewMap = () => {
                   <span className="info-value">{stateCounts.officialCheckpoints}</span>
                 </div>
                 <div className="info-item">
-                  <span className="info-label">Border Patrol Stations</span>
+                  <span className="info-label">Border Stations</span>
                   <span className="info-value">{stateCounts.borderStations}</span>
                 </div>
               </div>
 
+              {/* Repeat sections for DUI, Insurance, etc. as before */}
               <div className="info-section">
                 <h2 className="section-title">DUI/Sobriety Checkpoints</h2>
                 <div className="info-item">
                   <span className="info-label">Legal Status</span>
                   <span className="info-value">
-                    <span className={`legality-badge ${stateData.dui_legality ? 'legal' : 'illegal'}`}>
+                    <span
+                      className={`legality-badge ${
+                        stateData.dui_legality ? 'legal' : 'illegal'
+                      }`}
+                    >
                       {stateData.dui_legality ? 'Legal' : 'Illegal'}
                     </span>
                   </span>
@@ -571,7 +626,11 @@ const OverviewMap = () => {
                 <div className="info-item">
                   <span className="info-label">Legal Status</span>
                   <span className="info-value">
-                    <span className={`legality-badge ${stateData.insurance_legality ? 'legal' : 'illegal'}`}>
+                    <span
+                      className={`legality-badge ${
+                        stateData.insurance_legality ? 'legal' : 'illegal'
+                      }`}
+                    >
                       {stateData.insurance_legality ? 'Legal' : 'Illegal'}
                     </span>
                   </span>
@@ -589,7 +648,11 @@ const OverviewMap = () => {
                 <div className="info-item">
                   <span className="info-label">Legal Status</span>
                   <span className="info-value">
-                    <span className={`legality-badge ${stateData.drug_legality ? 'legal' : 'illegal'}`}>
+                    <span
+                      className={`legality-badge ${
+                        stateData.drug_legality ? 'legal' : 'illegal'
+                      }`}
+                    >
                       {stateData.drug_legality ? 'Legal' : 'Illegal'}
                     </span>
                   </span>
@@ -607,7 +670,11 @@ const OverviewMap = () => {
                 <div className="info-item">
                   <span className="info-label">Legal Status</span>
                   <span className="info-value">
-                    <span className={`legality-badge ${stateData.immigration_legality ? 'legal' : 'illegal'}`}>
+                    <span
+                      className={`legality-badge ${
+                        stateData.immigration_legality ? 'legal' : 'illegal'
+                      }`}
+                    >
                       {stateData.immigration_legality ? 'Legal' : 'Illegal'}
                     </span>
                   </span>
@@ -625,7 +692,11 @@ const OverviewMap = () => {
                 <div className="info-item">
                   <span className="info-label">Legal Status</span>
                   <span className="info-value">
-                    <span className={`legality-badge ${stateData.informational_legality ? 'legal' : 'illegal'}`}>
+                    <span
+                      className={`legality-badge ${
+                        stateData.informational_legality ? 'legal' : 'illegal'
+                      }`}
+                    >
                       {stateData.informational_legality ? 'Legal' : 'Illegal'}
                     </span>
                   </span>
