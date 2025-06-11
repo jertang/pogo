@@ -9,7 +9,7 @@ export function NavBar() {
         <nav className="navbar">
             <div className="navbar-logo">
                 <Link to="/">
-                    <img src="img/UW-logo-512.png" alt="UW Logo" />
+                    <img src="img/POGO_Logo.webp" alt="Logo" />
                 </Link>
             </div>
             <ul className="navbar-links">
